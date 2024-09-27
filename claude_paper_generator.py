@@ -1,5 +1,5 @@
 import tkinter as tk
-from tkinter import filedialog, simpledialog, messagebox, ttk
+from tkinter import filedialog, messagebox, ttk
 import requests
 import os
 import PyPDF2
@@ -9,10 +9,9 @@ from docx.enum.style import WD_STYLE_TYPE
 from docx.shared import Pt, Inches
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
+from docx.enum.section import WD_SECTION_START
 import re
 import json
-import markdown
-from bs4 import BeautifulSoup
 from datetime import datetime
 
 class ScriptsWindow(tk.Toplevel):
@@ -159,15 +158,15 @@ class ClaudeApp(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("University Paper Generator")
-        self.geometry("800x700")
+        self.geometry("800x800")
         
         # Initialize variables
         self.api_key = ""
         self.system_prompt = (
             "You are to write a university paper based on the provided scientific papers and study scripts. "
-            "Determine an appropriate title for the paper. The paper should be perfectly formatted as a real university paper suitable for submission, "
+            "Determine an appropriate title for the paper. The paper should be formatted as a real university paper suitable for submission, "
             "including chapters, sections, headings, and citations in Harvard style. "
-            "Include a table of contents at the beginning and a bibliography at the end. "
+            "Include a bibliography at the end. Do not include a table of contents. "
             "Take content from the scripts provided below and cite them appropriately. "
             "Write in first person singular, as if by {first_name} {last_name}. "
             "The paper should be dated {date}. "
@@ -176,47 +175,45 @@ class ClaudeApp(tk.Tk):
             "{instructions}\n\n"
             "The scripts are provided in the following format:\n\n"
             "{scripts}\n\n"
-            "Please output the paper in detailed Markdown format, using appropriate Markdown syntax for proper styling. Use headings, subheadings, bold and italic text where appropriate. Include bullet points, numbered lists, tables, and images if necessary. "
+            "Please output the paper in Markdown format with clear markers for headings and sections. "
+            "Use '#' for main headings, '##' for subheadings, and '###' for sub-subheadings. "
+            "Use **bold** and *italic* text where appropriate. Include bullet points and numbered lists if necessary. "
             "Ensure that citations are properly formatted in Harvard style and included within the text. "
-            "Make sure the Markdown output is detailed and properly formatted, so that when converted to a Word document, the paper looks professional.\n\n"
-            "Use the following structure:\n\n"
-            "# Title of the Paper\n\n"
-            "## Abstract\n\n"
-            "Abstract text...\n\n"
-            "## Table of Contents\n\n"
-            "1. Introduction\n"
-            "2. Chapter 1: Chapter Title\n"
-            "   - Subsection 1.1\n"
-            "   - Subsection 1.2\n"
-            "3. Chapter 2: Chapter Title\n"
-            "4. Conclusion\n"
-            "5. Bibliography\n\n"
-            "## Introduction\n\n"
-            "Introduction text...\n\n"
-            "## Chapter 1: Chapter Title\n\n"
-            "Chapter text...\n\n"
-            "### Subsection 1.1\n\n"
-            "Subsection text...\n\n"
-            "### Subsection 1.2\n\n"
-            "Subsection text...\n\n"
-            "## Chapter 2: Chapter Title\n\n"
+            "At the beginning of the paper, include a title page containing the paper's title, your name, and date. "
+            "Enclose the title page content between '####TITLE PAGE####' and '####END TITLE PAGE####'.\n\n"
+            "The structure of the paper should be:\n\n"
+            "####TITLE PAGE####\n"
+            "# [Title of the Paper]\n"
+            "Author: {first_name} {last_name}\n"
+            "Date: {date}\n"
+            "####END TITLE PAGE####\n\n"
+            "# Introduction\n"
             "...\n\n"
-            "## Conclusion\n\n"
-            "Conclusion text...\n\n"
-            "## Bibliography\n\n"
-            "- Reference 1 in Harvard style\n"
-            "- Reference 2 in Harvard style\n\n"
-            "Ensure that all headings are properly marked with '#' symbols, and use bold, italics, bullet points, and other Markdown formatting where appropriate."
+            "# Conclusion\n"
+            "...\n\n"
+            "# Bibliography\n"
+            "...\n\n"
+            "IMPORTANT: IF THE INSTRUCTIONS OR DETAILS SUCH AS TITLE PAGE,"
+            "BIBLIOGRAPHY, CITATION STYLE, ETC., ARE PROVIDED REGARDING STRUCTURING THE PAPER,"
+            "PLEASE FOLLOW THOSE INSTEAD OF THE ONES LISTED ABOVE.\n"
         )
         self.scripts = []
         self.instructions = []
         self.first_name = ""
         self.last_name = ""
         self.date = datetime.now().strftime("%Y-%m-%d")
-        
+
+        # Formatting options
+        self.font_name = "Times New Roman"
+        self.font_size_normal = 12
+        self.font_size_heading1 = 16
+        self.font_size_heading2 = 14
+        self.font_size_heading3 = 12
+        self.line_spacing = 1.5  # Default line spacing
+
         # Load saved settings
         self.load_settings()
-        
+
         # Build UI
         self.create_widgets()
     
@@ -261,9 +258,54 @@ class ClaudeApp(tk.Tk):
         self.system_prompt_text.grid(row=5, column=1, columnspan=2, pady=5, padx=5, sticky=tk.W+tk.E+tk.N+tk.S)
         self.system_prompt_text.insert(tk.END, self.system_prompt)
 
+        # Formatting Options
+        formatting_frame = ttk.LabelFrame(main_frame, text="Formatting Options")
+        formatting_frame.grid(row=6, column=0, columnspan=3, pady=10, padx=5, sticky=tk.W+tk.E)
+        formatting_frame.columnconfigure(1, weight=1)
+
+        # Font Name
+        ttk.Label(formatting_frame, text="Font Name:").grid(row=0, column=0, sticky=tk.W, pady=5)
+        self.font_name_var = tk.StringVar(value=self.font_name)
+        font_options = ["Times New Roman", "Arial", "Calibri", "Cambria", "Verdana"]
+        self.font_name_combobox = ttk.Combobox(formatting_frame, textvariable=self.font_name_var, values=font_options, state="readonly")
+        self.font_name_combobox.grid(row=0, column=1, sticky=tk.W+tk.E, pady=5, padx=5)
+
+        # Line Spacing
+        ttk.Label(formatting_frame, text="Line Spacing:").grid(row=1, column=0, sticky=tk.W, pady=5)
+        self.line_spacing_var = tk.StringVar(value="1.5 lines")
+        line_spacing_options = ["Single", "1.5 lines", "Double"]
+        self.line_spacing_combobox = ttk.Combobox(formatting_frame, textvariable=self.line_spacing_var, values=line_spacing_options, state="readonly")
+        self.line_spacing_combobox.grid(row=1, column=1, sticky=tk.W+tk.E, pady=5, padx=5)
+
+        # Font Sizes
+        ttk.Label(formatting_frame, text="Font Sizes (pt):").grid(row=2, column=0, sticky=tk.W, pady=5)
+        sizes_frame = ttk.Frame(formatting_frame)
+        sizes_frame.grid(row=2, column=1, sticky=tk.W+tk.E, pady=5, padx=5)
+        sizes_frame.columnconfigure(1, weight=1)
+
+        ttk.Label(sizes_frame, text="Normal Text:").grid(row=0, column=0, sticky=tk.W)
+        self.font_size_normal_var = tk.IntVar(value=self.font_size_normal)
+        self.font_size_normal_spinbox = ttk.Spinbox(sizes_frame, from_=8, to=72, textvariable=self.font_size_normal_var)
+        self.font_size_normal_spinbox.grid(row=0, column=1, sticky=tk.W+tk.E)
+
+        ttk.Label(sizes_frame, text="Heading 1:").grid(row=1, column=0, sticky=tk.W)
+        self.font_size_heading1_var = tk.IntVar(value=self.font_size_heading1)
+        self.font_size_heading1_spinbox = ttk.Spinbox(sizes_frame, from_=8, to=72, textvariable=self.font_size_heading1_var)
+        self.font_size_heading1_spinbox.grid(row=1, column=1, sticky=tk.W+tk.E)
+
+        ttk.Label(sizes_frame, text="Heading 2:").grid(row=2, column=0, sticky=tk.W)
+        self.font_size_heading2_var = tk.IntVar(value=self.font_size_heading2)
+        self.font_size_heading2_spinbox = ttk.Spinbox(sizes_frame, from_=8, to=72, textvariable=self.font_size_heading2_var)
+        self.font_size_heading2_spinbox.grid(row=2, column=1, sticky=tk.W+tk.E)
+
+        ttk.Label(sizes_frame, text="Heading 3:").grid(row=3, column=0, sticky=tk.W)
+        self.font_size_heading3_var = tk.IntVar(value=self.font_size_heading3)
+        self.font_size_heading3_spinbox = ttk.Spinbox(sizes_frame, from_=8, to=72, textvariable=self.font_size_heading3_var)
+        self.font_size_heading3_spinbox.grid(row=3, column=1, sticky=tk.W+tk.E)
+
         # Buttons
         buttons_frame = ttk.Frame(main_frame)
-        buttons_frame.grid(row=6, column=0, columnspan=3, pady=10)
+        buttons_frame.grid(row=7, column=0, columnspan=3, pady=10)
 
         ttk.Button(buttons_frame, text="Manage Scripts", command=self.open_scripts_window).pack(side=tk.LEFT, padx=5)
         ttk.Button(buttons_frame, text="Generate Paper", command=self.send_request).pack(side=tk.LEFT, padx=5)
@@ -272,11 +314,11 @@ class ClaudeApp(tk.Tk):
 
         # Output Text Area
         self.output_text = tk.Text(main_frame, wrap=tk.WORD, height=10)
-        self.output_text.grid(row=7, column=0, columnspan=3, pady=10, sticky=tk.W+tk.E+tk.N+tk.S)
+        self.output_text.grid(row=8, column=0, columnspan=3, pady=10, sticky=tk.W+tk.E+tk.N+tk.S)
 
         main_frame.columnconfigure(1, weight=1)
         main_frame.rowconfigure(5, weight=1)
-        main_frame.rowconfigure(7, weight=1)
+        main_frame.rowconfigure(8, weight=1)
 
     def load_settings(self):
         try:
@@ -286,6 +328,12 @@ class ClaudeApp(tk.Tk):
                 self.first_name = settings.get('first_name', '')
                 self.last_name = settings.get('last_name', '')
                 self.system_prompt = settings.get('system_prompt', self.system_prompt)
+                self.font_name = settings.get('font_name', 'Times New Roman')
+                self.font_size_normal = settings.get('font_size_normal', 12)
+                self.font_size_heading1 = settings.get('font_size_heading1', 16)
+                self.font_size_heading2 = settings.get('font_size_heading2', 14)
+                self.font_size_heading3 = settings.get('font_size_heading3', 12)
+                self.line_spacing = settings.get('line_spacing', '1.5 lines')
         except FileNotFoundError:
             pass  # It's okay if the file doesn't exist yet
 
@@ -294,7 +342,13 @@ class ClaudeApp(tk.Tk):
             'api_key': self.api_key_entry.get(),
             'first_name': self.first_name_entry.get(),
             'last_name': self.last_name_entry.get(),
-            'system_prompt': self.system_prompt_text.get(1.0, tk.END)
+            'system_prompt': self.system_prompt_text.get(1.0, tk.END),
+            'font_name': self.font_name_var.get(),
+            'font_size_normal': self.font_size_normal_var.get(),
+            'font_size_heading1': self.font_size_heading1_var.get(),
+            'font_size_heading2': self.font_size_heading2_var.get(),
+            'font_size_heading3': self.font_size_heading3_var.get(),
+            'line_spacing': self.line_spacing_var.get()
         }
         with open('claude_app_settings.json', 'w') as f:
             json.dump(settings, f)
@@ -405,20 +459,19 @@ class ClaudeApp(tk.Tk):
         ]
         
         # API call parameters
-        api_url = "https://api.anthropic.com/v1/messages"
+        api_url = "https://api.anthropic.com/v1/complete"
         headers = {
             "x-api-key": self.api_key,
-            "anthropic-version": "2023-06-01",
-            "content-type": "application/json",
-            "anthropic-beta": "max-tokens-3-5-sonnet-2024-07-15"
+            "content-type": "application/json"
         }
         data = {
-            "model": "claude-3-5-sonnet-20240620",
-            "max_tokens": 8192,
-            "messages": messages
+            "prompt": system_message,
+            "model": "claude-v1.3-100k",
+            "max_tokens_to_sample": 80000,
+            "temperature": 0.7,
+            "stop_sequences": ["###"]
         }
 
-        
         try:
             # Show a loading message
             self.output_text.delete(1.0, tk.END)
@@ -428,8 +481,7 @@ class ClaudeApp(tk.Tk):
             response = requests.post(api_url, headers=headers, json=data)
             if response.status_code == 200:
                 result = response.json()
-                content = result['content'][0]['text']
-                # Extract text content
+                content = result['completion']
                 response_text = content.strip()
                 self.output_text.delete(1.0, tk.END)
                 self.output_text.insert(tk.END, response_text)
@@ -451,6 +503,22 @@ class ClaudeApp(tk.Tk):
                                                  filetypes=[("Word Document", "*.docx")])
         if save_path:
             try:
+                # Get formatting options
+                font_name = self.font_name_var.get()
+                font_size_normal = self.font_size_normal_var.get()
+                font_size_heading1 = self.font_size_heading1_var.get()
+                font_size_heading2 = self.font_size_heading2_var.get()
+                font_size_heading3 = self.font_size_heading3_var.get()
+                line_spacing_option = self.line_spacing_var.get()
+                if line_spacing_option == "Single":
+                    line_spacing = 1
+                elif line_spacing_option == "1.5 lines":
+                    line_spacing = 1.5
+                elif line_spacing_option == "Double":
+                    line_spacing = 2
+                else:
+                    line_spacing = 1  # Default to single spacing
+
                 document = Document()
                 
                 # Document settings
@@ -467,86 +535,104 @@ class ClaudeApp(tk.Tk):
                 
                 # Title style
                 style_title = styles.add_style('TitleStyle', WD_STYLE_TYPE.PARAGRAPH)
-                style_title.font.size = Pt(20)
+                style_title.font.size = Pt(font_size_heading1)
                 style_title.font.bold = True
+                style_title.font.name = font_name
                 
                 # Heading 1 style
-                style_heading1 = styles.add_style('Heading1', WD_STYLE_TYPE.PARAGRAPH)
+                style_heading1 = styles.add_style('Heading1Custom', WD_STYLE_TYPE.PARAGRAPH)
                 style_heading1.base_style = styles['Heading 1']
-                style_heading1.font.size = Pt(16)
+                style_heading1.font.size = Pt(font_size_heading1)
                 style_heading1.font.bold = True
+                style_heading1.font.name = font_name
                 
                 # Heading 2 style
-                style_heading2 = styles.add_style('Heading2', WD_STYLE_TYPE.PARAGRAPH)
+                style_heading2 = styles.add_style('Heading2Custom', WD_STYLE_TYPE.PARAGRAPH)
                 style_heading2.base_style = styles['Heading 2']
-                style_heading2.font.size = Pt(14)
+                style_heading2.font.size = Pt(font_size_heading2)
                 style_heading2.font.bold = True
+                style_heading2.font.name = font_name
                 
                 # Heading 3 style
-                style_heading3 = styles.add_style('Heading3', WD_STYLE_TYPE.PARAGRAPH)
+                style_heading3 = styles.add_style('Heading3Custom', WD_STYLE_TYPE.PARAGRAPH)
                 style_heading3.base_style = styles['Heading 3']
-                style_heading3.font.size = Pt(12)
+                style_heading3.font.size = Pt(font_size_heading3)
                 style_heading3.font.bold = True
+                style_heading3.font.name = font_name
                 
                 # Normal text style
                 style_normal = styles['Normal']
-                style_normal.font.size = Pt(12)
+                style_normal.font.size = Pt(font_size_normal)
+                style_normal.font.name = font_name
                 
-                # Citation style
-                style_citation = styles.add_style('Citation', WD_STYLE_TYPE.PARAGRAPH)
-                style_citation.font.size = Pt(12)
-                style_citation.font.italic = True
-                
-                # Convert Markdown to HTML
-                html = markdown.markdown(output)
-                
-                # Parse HTML
-                soup = BeautifulSoup(html, 'html.parser')
-                
-                # Process the HTML elements
-                for element in soup.descendants:
-                    if element.name == 'h1':
-                        # Title
-                        p = document.add_paragraph(element.get_text(strip=True), style='TitleStyle')
-                        p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                    elif element.name == 'h2':
+                # Set line spacing for paragraph styles
+                for style in [style_normal, style_title, style_heading1, style_heading2, style_heading3]:
+                    style.paragraph_format.line_spacing = line_spacing
+
+                # Extract title page content
+                title_page_match = re.search(r'####TITLE PAGE####(.*?)####END TITLE PAGE####', output, re.DOTALL | re.IGNORECASE)
+                if title_page_match:
+                    title_page_content = title_page_match.group(1).strip()
+                    output = output.replace(title_page_match.group(0), '')  # Remove title page from output
+
+                    # Create title page
+                    p = document.add_paragraph('', style='TitleStyle')
+                    for line in title_page_content.split('\n'):
+                        if line.strip():
+                            p.add_run(line.strip()).add_break()
+                    p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+                    # Start a new section on the next page
+                    new_section = document.add_section(WD_SECTION_START.NEW_PAGE)
+                else:
+                    messagebox.showwarning("Warning", "Title page markers not found. Title page will not be created.")
+
+                # Process the rest of the content
+                paragraphs = output.strip().split('\n')
+
+                for para in paragraphs:
+                    para = para.strip()
+                    if not para:
+                        continue
+                    if para.startswith('## '):
                         # Heading level 1
-                        heading = element.get_text(strip=True)
-                        if heading.lower() == 'bibliography':
-                            document.add_page_break()
-                        document.add_paragraph(heading, style='Heading1')
-                    elif element.name == 'h3':
+                        document.add_paragraph(para[3:].strip(), style='Heading1Custom')
+                    elif para.startswith('### '):
                         # Heading level 2
-                        document.add_paragraph(element.get_text(strip=True), style='Heading2')
-                    elif element.name == 'h4':
+                        document.add_paragraph(para[4:].strip(), style='Heading2Custom')
+                    elif para.startswith('#### '):
                         # Heading level 3
-                        document.add_paragraph(element.get_text(strip=True), style='Heading3')
-                    elif element.name == 'p':
+                        document.add_paragraph(para[5:].strip(), style='Heading3Custom')
+                    elif re.match(r'^\d+\.', para):
+                        # Numbered list
+                        items = para.split('\n')
+                        for item in items:
+                            p = document.add_paragraph(style='List Number')
+                            p.add_run(item.strip())
+                    elif para.startswith('- '):
+                        # Bullet list
+                        items = para.split('\n')
+                        for item in items:
+                            p = document.add_paragraph(style='List Bullet')
+                            p.add_run(item[2:].strip())
+                    else:
                         # Regular paragraph
-                        paragraph = document.add_paragraph(style='Normal')
-                        self._add_runs(paragraph, element)
-                    elif element.name == 'em' or element.name == 'i':
-                        pass  # Handled in _add_runs
-                    elif element.name == 'strong' or element.name == 'b':
-                        pass  # Handled in _add_runs
-                    elif element.name == 'ul':
-                        # Unordered list
-                        for li in element.find_all('li', recursive=False):
-                            paragraph = document.add_paragraph(style='List Bullet')
-                            self._add_runs(paragraph, li)
-                    elif element.name == 'ol':
-                        # Ordered list
-                        for li in element.find_all('li', recursive=False):
-                            paragraph = document.add_paragraph(style='List Number')
-                            self._add_runs(paragraph, li)
-                    elif element.name == 'blockquote':
-                        # Blockquote
-                        paragraph = document.add_paragraph(style='Intense Quote')
-                        self._add_runs(paragraph, element)
-                
+                        p = document.add_paragraph(style='Normal')
+                        self._add_runs(p, para)
+
                 # Add page numbers
-                self._add_page_numbers(document.sections[0])
-                
+                self._add_page_numbers(document.sections[1])
+
+                # Add table of contents
+                document.add_page_break()
+                toc_paragraph = document.add_paragraph('Table of Contents', style='Heading1Custom')
+                toc_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                paragraph = document.add_paragraph()
+                run = paragraph.add_run()
+                fldSimple = OxmlElement('w:fldSimple')
+                fldSimple.set(qn('w:instr'), 'TOC \\o "1-3" \\h \\z \\u')
+                run._r.append(fldSimple)
+
                 document.save(save_path)
                 messagebox.showinfo("Success", f"Output saved to {save_path}")
             except Exception as e:
@@ -561,31 +647,19 @@ class ClaudeApp(tk.Tk):
         fldSimple.set(qn('w:instr'), 'PAGE')
         run._r.append(fldSimple)
 
-    def _add_runs(self, paragraph, element):
-        for node in element.descendants:
-            if isinstance(node, str):
-                paragraph.add_run(node)
-            elif node.name == 'strong' or node.name == 'b':
-                run = paragraph.add_run(node.get_text())
+    def _add_runs(self, paragraph, text):
+        # This method adds runs to the paragraph, handling bold and italic text
+        tokens = re.split(r'(\*\*.*?\*\*|\*.*?\*)', text)
+
+        for token in tokens:
+            if token.startswith('**') and token.endswith('**'):
+                run = paragraph.add_run(token[2:-2])
                 run.bold = True
-            elif node.name == 'em' or node.name == 'i':
-                run = paragraph.add_run(node.get_text())
+            elif token.startswith('*') and token.endswith('*'):
+                run = paragraph.add_run(token[1:-1])
                 run.italic = True
-            elif node.name == 'a':
-                run = paragraph.add_run(node.get_text())
-                run.font.underline = True
-            elif node.name == 'img':
-                img_src = node.get('src')
-                if img_src:
-                    try:
-                        response = requests.get(img_src)
-                        if response.status_code == 200:
-                            from io import BytesIO
-                            image_stream = BytesIO(response.content)
-                            paragraph.add_run().add_picture(image_stream)
-                    except Exception as e:
-                        pass  # Image couldn't be loaded
-            # Add more styles as needed
+            else:
+                paragraph.add_run(token)
 
 if __name__ == "__main__":
     app = ClaudeApp()
