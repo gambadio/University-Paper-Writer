@@ -4,9 +4,11 @@ import requests
 import os
 import PyPDF2
 from docx import Document
-from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_BREAK
 from docx.enum.style import WD_STYLE_TYPE
 from docx.shared import Pt, Inches
+from docx.oxml import OxmlElement
+from docx.oxml.ns import qn
 import re
 import json
 import markdown
@@ -32,6 +34,12 @@ class ScriptsWindow(tk.Toplevel):
         upload_btn = ttk.Button(buttons_frame, text="Upload Script", command=self.upload_script)
         upload_btn.pack(side=tk.LEFT, padx=5)
 
+        move_up_btn = ttk.Button(buttons_frame, text="Move Up", command=self.move_up)
+        move_up_btn.pack(side=tk.LEFT, padx=5)
+
+        move_down_btn = ttk.Button(buttons_frame, text="Move Down", command=self.move_down)
+        move_down_btn.pack(side=tk.LEFT, padx=5)
+
         delete_btn = ttk.Button(buttons_frame, text="Delete Selected", command=self.delete_selected)
         delete_btn.pack(side=tk.LEFT, padx=5)
 
@@ -46,6 +54,30 @@ class ScriptsWindow(tk.Toplevel):
         for file_path in file_paths:
             self.parent.upload_script(file_path)
         self.update_listbox()
+
+    def move_up(self):
+        selection = self.scripts_listbox.curselection()
+        if selection:
+            index = selection[0]
+            if index > 0:
+                # Swap in parent list
+                self.parent.scripts[index], self.parent.scripts[index - 1] = self.parent.scripts[index - 1], self.parent.scripts[index]
+                # Update listbox
+                self.update_listbox()
+                # Reselect the moved item
+                self.scripts_listbox.select_set(index - 1)
+
+    def move_down(self):
+        selection = self.scripts_listbox.curselection()
+        if selection:
+            index = selection[0]
+            if index < len(self.parent.scripts) - 1:
+                # Swap in parent list
+                self.parent.scripts[index], self.parent.scripts[index + 1] = self.parent.scripts[index + 1], self.parent.scripts[index]
+                # Update listbox
+                self.update_listbox()
+                # Reselect the moved item
+                self.scripts_listbox.select_set(index + 1)
 
     def delete_selected(self):
         selection = self.scripts_listbox.curselection()
@@ -63,23 +95,77 @@ class InstructionsWindow(tk.Toplevel):
     def __init__(self, parent):
         super().__init__(parent)
         self.parent = parent
-        self.title("Enter Instructions")
-        self.geometry("600x400")
+        self.title("Manage Instructions")
+        self.geometry("500x400")
         
         self.create_widgets()
 
     def create_widgets(self):
-        self.instructions_text = tk.Text(self, wrap=tk.WORD, height=20)
-        self.instructions_text.pack(pady=10, padx=10, fill=tk.BOTH, expand=True)
-        self.instructions_text.insert(tk.END, self.parent.task)
+        self.instructions_listbox = tk.Listbox(self, width=70, height=15)
+        self.instructions_listbox.pack(pady=10, padx=10, fill=tk.BOTH, expand=True)
 
-        save_btn = ttk.Button(self, text="Save Instructions", command=self.save_instructions)
-        save_btn.pack(pady=10)
+        buttons_frame = ttk.Frame(self)
+        buttons_frame.pack(pady=10, fill=tk.X)
 
-    def save_instructions(self):
-        self.parent.task = self.instructions_text.get(1.0, tk.END).strip()
-        self.destroy()
-        messagebox.showinfo("Instructions", "Instructions saved successfully.")
+        upload_btn = ttk.Button(buttons_frame, text="Upload Instruction", command=self.upload_instruction)
+        upload_btn.pack(side=tk.LEFT, padx=5)
+
+        move_up_btn = ttk.Button(buttons_frame, text="Move Up", command=self.move_up)
+        move_up_btn.pack(side=tk.LEFT, padx=5)
+
+        move_down_btn = ttk.Button(buttons_frame, text="Move Down", command=self.move_down)
+        move_down_btn.pack(side=tk.LEFT, padx=5)
+
+        delete_btn = ttk.Button(buttons_frame, text="Delete Selected", command=self.delete_selected)
+        delete_btn.pack(side=tk.LEFT, padx=5)
+
+        close_btn = ttk.Button(buttons_frame, text="Close", command=self.destroy)
+        close_btn.pack(side=tk.RIGHT, padx=5)
+
+        self.update_listbox()
+
+    def upload_instruction(self):
+        file_types = [("PDF files", "*.pdf"), ("Text files", "*.txt"), ("All files", "*.*")]
+        file_paths = filedialog.askopenfilenames(title="Select Instruction File(s)", filetypes=file_types)
+        for file_path in file_paths:
+            self.parent.upload_instruction(file_path)
+        self.update_listbox()
+
+    def move_up(self):
+        selection = self.instructions_listbox.curselection()
+        if selection:
+            index = selection[0]
+            if index > 0:
+                # Swap in parent list
+                self.parent.instructions[index], self.parent.instructions[index - 1] = self.parent.instructions[index - 1], self.parent.instructions[index]
+                # Update listbox
+                self.update_listbox()
+                # Reselect the moved item
+                self.instructions_listbox.select_set(index - 1)
+
+    def move_down(self):
+        selection = self.instructions_listbox.curselection()
+        if selection:
+            index = selection[0]
+            if index < len(self.parent.instructions) - 1:
+                # Swap in parent list
+                self.parent.instructions[index], self.parent.instructions[index + 1] = self.parent.instructions[index + 1], self.parent.instructions[index]
+                # Update listbox
+                self.update_listbox()
+                # Reselect the moved item
+                self.instructions_listbox.select_set(index + 1)
+
+    def delete_selected(self):
+        selection = self.instructions_listbox.curselection()
+        if selection:
+            index = selection[0]
+            del self.parent.instructions[index]
+            self.update_listbox()
+
+    def update_listbox(self):
+        self.instructions_listbox.delete(0, tk.END)
+        for instruction in self.parent.instructions:
+            self.instructions_listbox.insert(tk.END, instruction[0])
 
 class ClaudeApp(tk.Tk):
     def __init__(self):
@@ -98,16 +184,33 @@ class ClaudeApp(tk.Tk):
             "Write in first person singular, as if by {first_name} {last_name}. "
             "The paper should be dated {date}. "
             "Remember to sometimes make minor spelling mistakes as a student around B2/C1 English level might. "
+            "Your specific instructions are:\n\n"
+            "{instructions}\n\n"
             "The scripts are provided in the following format:\n\n"
             "{scripts}\n\n"
-            "Please output the paper in Markdown format, using the following structure:\n\n"
+            "Please output the paper in detailed Markdown format, using appropriate Markdown syntax for proper styling. Use headings, subheadings, bold and italic text where appropriate. Include bullet points, numbered lists, tables, and images if necessary. "
+            "Ensure that citations are properly formatted in Harvard style and included within the text. "
+            "Make sure the Markdown output is detailed and properly formatted, so that when converted to a Word document, the paper looks professional.\n\n"
+            "Use the following structure:\n\n"
             "# Title of the Paper\n\n"
             "## Abstract\n\n"
             "Abstract text...\n\n"
+            "## Table of Contents\n\n"
+            "1. Introduction\n"
+            "2. Chapter 1: Chapter Title\n"
+            "   - Subsection 1.1\n"
+            "   - Subsection 1.2\n"
+            "3. Chapter 2: Chapter Title\n"
+            "4. Conclusion\n"
+            "5. Bibliography\n\n"
             "## Introduction\n\n"
             "Introduction text...\n\n"
             "## Chapter 1: Chapter Title\n\n"
             "Chapter text...\n\n"
+            "### Subsection 1.1\n\n"
+            "Subsection text...\n\n"
+            "### Subsection 1.2\n\n"
+            "Subsection text...\n\n"
             "## Chapter 2: Chapter Title\n\n"
             "...\n\n"
             "## Conclusion\n\n"
@@ -115,10 +218,10 @@ class ClaudeApp(tk.Tk):
             "## Bibliography\n\n"
             "- Reference 1 in Harvard style\n"
             "- Reference 2 in Harvard style\n\n"
-            "Ensure that headings and citations are properly marked in the Markdown."
+            "Ensure that all headings are properly marked with '#' symbols, and use bold, italics, bullet points, and other Markdown formatting where appropriate."
         )
         self.scripts = []
-        self.task = ""
+        self.instructions = []
         self.first_name = ""
         self.last_name = ""
         self.date = datetime.now().strftime("%Y-%m-%d")
@@ -162,7 +265,7 @@ class ClaudeApp(tk.Tk):
         self.date_entry.insert(0, self.date)
 
         # Instructions Button
-        ttk.Button(main_frame, text="Enter Instructions", command=self.open_instructions_window).grid(row=4, column=0, columnspan=3, pady=10)
+        ttk.Button(main_frame, text="Manage Instructions", command=self.open_instructions_window).grid(row=4, column=0, columnspan=3, pady=10)
 
         # System Prompt
         ttk.Label(main_frame, text="System Prompt:").grid(row=5, column=0, sticky=tk.W, pady=5)
@@ -195,17 +298,15 @@ class ClaudeApp(tk.Tk):
                 self.first_name = settings.get('first_name', '')
                 self.last_name = settings.get('last_name', '')
                 self.system_prompt = settings.get('system_prompt', self.system_prompt)
-                self.task = settings.get('task', '')
         except FileNotFoundError:
             pass  # It's okay if the file doesn't exist yet
-    
+
     def save_settings(self):
         settings = {
             'api_key': self.api_key_entry.get(),
             'first_name': self.first_name_entry.get(),
             'last_name': self.last_name_entry.get(),
-            'system_prompt': self.system_prompt_text.get(1.0, tk.END),
-            'task': self.task
+            'system_prompt': self.system_prompt_text.get(1.0, tk.END)
         }
         with open('claude_app_settings.json', 'w') as f:
             json.dump(settings, f)
@@ -250,13 +351,43 @@ class ClaudeApp(tk.Tk):
                     self.scripts.append((file_name, text))
                 except Exception as e:
                     messagebox.showerror("Error", f"Error reading text file {file_name}: {e}")
-    
+
+    def upload_instruction(self, file_path):
+        file_name = os.path.basename(file_path)
+        file_extension = os.path.splitext(file_path)[1].lower()
+        if file_extension == '.pdf':
+            # Extract text from PDF
+            try:
+                with open(file_path, 'rb') as f:
+                    reader = PyPDF2.PdfReader(f)
+                    text = ""
+                    for page in reader.pages:
+                        page_text = page.extract_text()
+                        if page_text:
+                            text += page_text
+                self.instructions.append((file_name, text))
+            except Exception as e:
+                messagebox.showerror("Error", f"Error reading PDF file {file_name}: {e}")
+        else:
+            # Read text file
+            try:
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    text = f.read()
+                self.instructions.append((file_name, text))
+            except UnicodeDecodeError:
+                try:
+                    with open(file_path, 'r', encoding='latin-1') as f:
+                        text = f.read()
+                    self.instructions.append((file_name, text))
+                except Exception as e:
+                    messagebox.showerror("Error", f"Error reading text file {file_name}: {e}")
+
     def send_request(self):
-        if not self.scripts:
-            messagebox.showerror("Error", "Please upload scripts/papers first.")
+        if not self.instructions:
+            messagebox.showerror("Error", "Please upload instruction files first.")
             return
-        if not self.task:
-            messagebox.showerror("Error", "Please enter instructions.")
+        if not self.scripts:
+            messagebox.showerror("Error", "Please upload script files first.")
             return
         if not self.first_name_entry.get() or not self.last_name_entry.get():
             messagebox.showerror("Error", "Please enter your first and last name.")
@@ -272,10 +403,11 @@ class ClaudeApp(tk.Tk):
         self.system_prompt = self.system_prompt_text.get(1.0, tk.END)
         
         # Prepare the messages
+        formatted_instructions = "\n\n".join([f"Instruction {i+1} ({name}):\n{content}" for i, (name, content) in enumerate(self.instructions)])
         formatted_scripts = "\n\n".join([f"Script {i+1} ({name}):\n{content}" for i, (name, content) in enumerate(self.scripts)])
         system_message = self.system_prompt.format(
             scripts=formatted_scripts,
-            task=self.task,
+            instructions=formatted_instructions,
             first_name=self.first_name,
             last_name=self.last_name,
             date=self.date
@@ -285,17 +417,17 @@ class ClaudeApp(tk.Tk):
         ]
         
         # API call parameters
-        api_url = "https://api.anthropic.com/v1/messages"
+        api_url = "https://api.anthropic.com/v1/complete"
         headers = {
             "x-api-key": self.api_key,
             "anthropic-version": "2023-06-01",
             "content-type": "application/json",
-            "anthropic-beta": "max-tokens-3-5-sonnet-2024-07-15"
         }
         data = {
-            "model": "claude-3-5-sonnet-20240620",
-            "max_tokens": 8192,
-            "messages": messages
+            "model": "claude-2",
+            "max_tokens_to_sample": 8192,
+            "prompt": "\n\n".join([f"{msg['role']}: {msg['content']}" for msg in messages]) + "\n\nAssistant:",
+            "stop_sequences": ["\n\nHuman:"],
         }
         
         try:
@@ -307,12 +439,9 @@ class ClaudeApp(tk.Tk):
             response = requests.post(api_url, headers=headers, json=data)
             if response.status_code == 200:
                 result = response.json()
-                content = result['content']
+                content = result['completion']
                 # Extract text content
-                response_text = ""
-                for block in content:
-                    if block['type'] == 'text':
-                        response_text += block['text']
+                response_text = content.strip()
                 self.output_text.delete(1.0, tk.END)
                 self.output_text.insert(tk.END, response_text)
                 messagebox.showinfo("Success", "Paper generated.")
@@ -323,7 +452,7 @@ class ClaudeApp(tk.Tk):
         except Exception as e:
             self.output_text.delete(1.0, tk.END)
             messagebox.showerror("Error", f"Error making API request: {e}")
-    
+
     def save_output(self):
         output = self.output_text.get(1.0, tk.END).strip()
         if not output:
@@ -364,6 +493,12 @@ class ClaudeApp(tk.Tk):
                 style_heading2.font.size = Pt(14)
                 style_heading2.font.bold = True
                 
+                # Heading 3 style
+                style_heading3 = styles.add_style('Heading3', WD_STYLE_TYPE.PARAGRAPH)
+                style_heading3.base_style = styles['Heading 3']
+                style_heading3.font.size = Pt(12)
+                style_heading3.font.bold = True
+                
                 # Normal text style
                 style_normal = styles['Normal']
                 style_normal.font.size = Pt(12)
@@ -380,52 +515,88 @@ class ClaudeApp(tk.Tk):
                 soup = BeautifulSoup(html, 'html.parser')
                 
                 # Process the HTML elements
-                for element in soup.find_all():
+                for element in soup.descendants:
                     if element.name == 'h1':
                         # Title
-                        p = document.add_paragraph(element.text.strip(), style='TitleStyle')
+                        p = document.add_paragraph(element.get_text(strip=True), style='TitleStyle')
                         p.alignment = WD_ALIGN_PARAGRAPH.CENTER
                     elif element.name == 'h2':
                         # Heading level 1
-                        heading = element.text.strip()
+                        heading = element.get_text(strip=True)
                         if heading.lower() == 'bibliography':
                             document.add_page_break()
                         document.add_paragraph(heading, style='Heading1')
                     elif element.name == 'h3':
                         # Heading level 2
-                        document.add_paragraph(element.text.strip(), style='Heading2')
+                        document.add_paragraph(element.get_text(strip=True), style='Heading2')
+                    elif element.name == 'h4':
+                        # Heading level 3
+                        document.add_paragraph(element.get_text(strip=True), style='Heading3')
                     elif element.name == 'p':
                         # Regular paragraph
                         paragraph = document.add_paragraph(style='Normal')
-                        for child in element.children:
-                            if child.name == 'em':
-                                # Italicized text (possibly citations)
-                                paragraph.add_run(child.text).italic = True
-                            else:
-                                paragraph.add_run(child.text)
+                        self._add_runs(paragraph, element)
+                    elif element.name == 'em' or element.name == 'i':
+                        pass  # Handled in _add_runs
+                    elif element.name == 'strong' or element.name == 'b':
+                        pass  # Handled in _add_runs
                     elif element.name == 'ul':
-                        # Unordered list (for bibliography)
-                        for li in element.find_all('li'):
-                            document.add_paragraph(li.text.strip(), style='Citation')
+                        # Unordered list
+                        for li in element.find_all('li', recursive=False):
+                            paragraph = document.add_paragraph(style='List Bullet')
+                            self._add_runs(paragraph, li)
+                    elif element.name == 'ol':
+                        # Ordered list
+                        for li in element.find_all('li', recursive=False):
+                            paragraph = document.add_paragraph(style='List Number')
+                            self._add_runs(paragraph, li)
+                    elif element.name == 'blockquote':
+                        # Blockquote
+                        paragraph = document.add_paragraph(style='Intense Quote')
+                        self._add_runs(paragraph, element)
                 
                 # Add page numbers
-                section = document.sections[0]
-                footer = section.footer
-                paragraph = footer.paragraphs[0]
-                paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                run = paragraph.add_run()
-                fldChar = run._element.makeelement('{http://schemas.openxmlformats.org/wordprocessingml/2006/main}fldChar', {'w:fldCharType': 'begin'})
-                instrText = run._element.makeelement('{http://schemas.openxmlformats.org/wordprocessingml/2006/main}instrText', {})
-                instrText.text = "PAGE"
-                fldChar2 = run._element.makeelement('{http://schemas.openxmlformats.org/wordprocessingml/2006/main}fldChar', {'w:fldCharType': 'end'})
-                run._element.append(fldChar)
-                run._element.append(instrText)
-                run._element.append(fldChar2)
+                self._add_page_numbers(document.sections[0])
                 
                 document.save(save_path)
                 messagebox.showinfo("Success", f"Output saved to {save_path}")
             except Exception as e:
                 messagebox.showerror("Error", f"Error saving Word file: {e}")
+
+    def _add_page_numbers(self, section):
+        footer = section.footer
+        paragraph = footer.paragraphs[0]
+        paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        run = paragraph.add_run()
+        fldSimple = OxmlElement('w:fldSimple')
+        fldSimple.set(qn('w:instr'), 'PAGE')
+        run._r.append(fldSimple)
+
+    def _add_runs(self, paragraph, element):
+        for node in element.descendants:
+            if isinstance(node, str):
+                paragraph.add_run(node)
+            elif node.name == 'strong' or node.name == 'b':
+                run = paragraph.add_run(node.get_text())
+                run.bold = True
+            elif node.name == 'em' or node.name == 'i':
+                run = paragraph.add_run(node.get_text())
+                run.italic = True
+            elif node.name == 'a':
+                run = paragraph.add_run(node.get_text())
+                run.font.underline = True
+            elif node.name == 'img':
+                img_src = node.get('src')
+                if img_src:
+                    try:
+                        response = requests.get(img_src)
+                        if response.status_code == 200:
+                            from io import BytesIO
+                            image_stream = BytesIO(response.content)
+                            paragraph.add_run().add_picture(image_stream)
+                    except Exception as e:
+                        pass  # Image couldn't be loaded
+            # Add more styles as needed
 
 if __name__ == "__main__":
     app = ClaudeApp()
