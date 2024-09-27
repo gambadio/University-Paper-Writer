@@ -459,17 +459,17 @@ class ClaudeApp(tk.Tk):
         ]
         
         # API call parameters
-        api_url = "https://api.anthropic.com/v1/complete"
+        api_url = "https://api.anthropic.com/v1/messages"
         headers = {
             "x-api-key": self.api_key,
-            "content-type": "application/json"
+            "anthropic-version": "2023-06-01",
+            "content-type": "application/json",
+            "anthropic-beta": "max-tokens-3-5-sonnet-2024-07-15"
         }
         data = {
-            "prompt": system_message,
-            "model": "claude-v1.3-100k",
-            "max_tokens_to_sample": 80000,
-            "temperature": 0.7,
-            "stop_sequences": ["###"]
+            "model": "claude-3-5-sonnet-20240620",
+            "max_tokens": 8192,
+            "messages": messages
         }
 
         try:
@@ -481,7 +481,7 @@ class ClaudeApp(tk.Tk):
             response = requests.post(api_url, headers=headers, json=data)
             if response.status_code == 200:
                 result = response.json()
-                content = result['completion']
+                content = result['content'][0]['text']
                 response_text = content.strip()
                 self.output_text.delete(1.0, tk.END)
                 self.output_text.insert(tk.END, response_text)
