@@ -1,15 +1,15 @@
 import tkinter as tk
-from tkinter import filedialog, simpledialog, messagebox, ttk
+from tkinter import filedialog, messagebox, ttk
 import requests
 import os
 import PyPDF2
 from docx import Document
-from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_BREAK
+from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_LINE_SPACING
 from docx.enum.style import WD_STYLE_TYPE
+from docx.enum.section import WD_SECTION
 from docx.shared import Pt, Inches
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
-import re
 import json
 import markdown
 from bs4 import BeautifulSoup
@@ -60,11 +60,8 @@ class ScriptsWindow(tk.Toplevel):
         if selection:
             index = selection[0]
             if index > 0:
-                # Swap in parent list
                 self.parent.scripts[index], self.parent.scripts[index - 1] = self.parent.scripts[index - 1], self.parent.scripts[index]
-                # Update listbox
                 self.update_listbox()
-                # Reselect the moved item
                 self.scripts_listbox.select_set(index - 1)
 
     def move_down(self):
@@ -72,11 +69,8 @@ class ScriptsWindow(tk.Toplevel):
         if selection:
             index = selection[0]
             if index < len(self.parent.scripts) - 1:
-                # Swap in parent list
                 self.parent.scripts[index], self.parent.scripts[index + 1] = self.parent.scripts[index + 1], self.parent.scripts[index]
-                # Update listbox
                 self.update_listbox()
-                # Reselect the moved item
                 self.scripts_listbox.select_set(index + 1)
 
     def delete_selected(self):
@@ -136,11 +130,8 @@ class InstructionsWindow(tk.Toplevel):
         if selection:
             index = selection[0]
             if index > 0:
-                # Swap in parent list
                 self.parent.instructions[index], self.parent.instructions[index - 1] = self.parent.instructions[index - 1], self.parent.instructions[index]
-                # Update listbox
                 self.update_listbox()
-                # Reselect the moved item
                 self.instructions_listbox.select_set(index - 1)
 
     def move_down(self):
@@ -148,11 +139,8 @@ class InstructionsWindow(tk.Toplevel):
         if selection:
             index = selection[0]
             if index < len(self.parent.instructions) - 1:
-                # Swap in parent list
                 self.parent.instructions[index], self.parent.instructions[index + 1] = self.parent.instructions[index + 1], self.parent.instructions[index]
-                # Update listbox
                 self.update_listbox()
-                # Reselect the moved item
                 self.instructions_listbox.select_set(index + 1)
 
     def delete_selected(self):
@@ -176,49 +164,42 @@ class ClaudeApp(tk.Tk):
         # Initialize variables
         self.api_key = ""
         self.system_prompt = (
-            "You are to write a university paper based on the provided scientific papers and study scripts. "
-            "Determine an appropriate title for the paper. The paper should be perfectly formatted as a real university paper suitable for submission, "
-            "including chapters, sections, headings, and citations in Harvard style. "
-            "Include a table of contents at the beginning and a bibliography at the end. "
-            "Take content from the scripts provided below and cite them appropriately. "
-            "Write in first person singular, as if by {first_name} {last_name}. "
-            "The paper should be dated {date}. "
-            "Remember to sometimes make minor spelling mistakes as a student around B2/C1 English level might. "
-            "Your specific instructions are:\n\n"
+            "Your task is to write a professional university-level paper based on the provided scientific papers and study scripts. "
+            "The paper should be thoroughly researched, well-structured, and ready for submission. Please adhere to the following guidelines:\n\n"
+            "- **Title and Author**: Determine an appropriate and compelling title for the paper. The paper should be written by {first_name} {last_name}. Include the author's name and the date {date} in the header of each page.\n\n"
+            "- **Formatting**: The paper should follow standard academic formatting:\n"
+            "  - Use Times New Roman font, size 12 for the main text.\n"
+            "  - Set line spacing to 1.5.\n"
+            "  - Include page numbers at the bottom center of each page.\n"
+            "  - Margins should be 1 inch on all sides.\n"
+            "  - Include a header with the author's name and date.\n\n"
+            "- **Structure**:\n"
+            "  - **Title Page**: Include the title of the paper, the author's name, the course name, instructor's name, and the date, centered on the page.\n"
+            "  - **Abstract**: Provide a concise summary of the paper's content.\n"
+            "  - **Table of Contents**: List all the sections and subsections with page numbers.\n"
+            "  - **Introduction**: Introduce the topic and outline the purpose of the paper.\n"
+            "  - **Main Body**: Organize the content into chapters and sections with appropriate headings.\n"
+            "  - **Conclusion**: Summarize the findings and discuss their implications.\n"
+            "  - **Bibliography**: Include all references in Harvard citation style.\n\n"
+            "- **Content**:\n"
+            "  - Incorporate content from the provided scripts and cite them appropriately within the text.\n"
+            "  - Ensure all information is accurate and derived from credible sources.\n"
+            "  - Write in the first person singular, as if by {first_name} {last_name}.\n"
+            "  - Occasionally include minor spelling mistakes to emulate writing by a student at B2/C1 English level.\n\n"
+            "- **Style**:\n"
+            "  - Use formal academic language throughout.\n"
+            "  - Employ proper grammar and syntax.\n"
+            "  - Use headings, subheadings, bullet points, numbered lists, tables, and figures where appropriate.\n"
+            "  - Ensure that all citations are properly formatted in Harvard style within the text and in the bibliography.\n\n"
+            "- **Markdown Output**:\n"
+            "  - Output the paper in detailed Markdown format.\n"
+            "  - Use appropriate Markdown syntax for headings, bold, italics, lists, tables, and images.\n"
+            "  - Ensure that the Markdown is structured such that, when converted to a Word document, the paper appears professional and adheres to the formatting guidelines.\n\n"
+            "Please incorporate the specific instructions provided below:\n\n"
             "{instructions}\n\n"
-            "The scripts are provided in the following format:\n\n"
+            "Use the scripts provided below as sources:\n\n"
             "{scripts}\n\n"
-            "Please output the paper in detailed Markdown format, using appropriate Markdown syntax for proper styling. Use headings, subheadings, bold and italic text where appropriate. Include bullet points, numbered lists, tables, and images if necessary. "
-            "Ensure that citations are properly formatted in Harvard style and included within the text. "
-            "Make sure the Markdown output is detailed and properly formatted, so that when converted to a Word document, the paper looks professional.\n\n"
-            "Use the following structure:\n\n"
-            "# Title of the Paper\n\n"
-            "## Abstract\n\n"
-            "Abstract text...\n\n"
-            "## Table of Contents\n\n"
-            "1. Introduction\n"
-            "2. Chapter 1: Chapter Title\n"
-            "   - Subsection 1.1\n"
-            "   - Subsection 1.2\n"
-            "3. Chapter 2: Chapter Title\n"
-            "4. Conclusion\n"
-            "5. Bibliography\n\n"
-            "## Introduction\n\n"
-            "Introduction text...\n\n"
-            "## Chapter 1: Chapter Title\n\n"
-            "Chapter text...\n\n"
-            "### Subsection 1.1\n\n"
-            "Subsection text...\n\n"
-            "### Subsection 1.2\n\n"
-            "Subsection text...\n\n"
-            "## Chapter 2: Chapter Title\n\n"
-            "...\n\n"
-            "## Conclusion\n\n"
-            "Conclusion text...\n\n"
-            "## Bibliography\n\n"
-            "- Reference 1 in Harvard style\n"
-            "- Reference 2 in Harvard style\n\n"
-            "Ensure that all headings are properly marked with '#' symbols, and use bold, italics, bullet points, and other Markdown formatting where appropriate."
+            "Ensure that the final output is a comprehensive, well-structured, and professionally formatted university paper that meets all the above guidelines."
         )
         self.scripts = []
         self.instructions = []
@@ -299,7 +280,7 @@ class ClaudeApp(tk.Tk):
                 self.last_name = settings.get('last_name', '')
                 self.system_prompt = settings.get('system_prompt', self.system_prompt)
         except FileNotFoundError:
-            pass  # It's okay if the file doesn't exist yet
+            pass
 
     def save_settings(self):
         settings = {
@@ -326,7 +307,6 @@ class ClaudeApp(tk.Tk):
         file_name = os.path.basename(file_path)
         file_extension = os.path.splitext(file_path)[1].lower()
         if file_extension == '.pdf':
-            # Extract text from PDF
             try:
                 with open(file_path, 'rb') as f:
                     reader = PyPDF2.PdfReader(f)
@@ -339,7 +319,6 @@ class ClaudeApp(tk.Tk):
             except Exception as e:
                 messagebox.showerror("Error", f"Error reading PDF file {file_name}: {e}")
         else:
-            # Read text file
             try:
                 with open(file_path, 'r', encoding='utf-8') as f:
                     text = f.read()
@@ -356,7 +335,6 @@ class ClaudeApp(tk.Tk):
         file_name = os.path.basename(file_path)
         file_extension = os.path.splitext(file_path)[1].lower()
         if file_extension == '.pdf':
-            # Extract text from PDF
             try:
                 with open(file_path, 'rb') as f:
                     reader = PyPDF2.PdfReader(f)
@@ -369,7 +347,6 @@ class ClaudeApp(tk.Tk):
             except Exception as e:
                 messagebox.showerror("Error", f"Error reading PDF file {file_name}: {e}")
         else:
-            # Read text file
             try:
                 with open(file_path, 'r', encoding='utf-8') as f:
                     text = f.read()
@@ -412,24 +389,24 @@ class ClaudeApp(tk.Tk):
             last_name=self.last_name,
             date=self.date
         )
-        messages = [
-            {"role": "user", "content": system_message}
-        ]
-        
+
+        # Build the messages
+        messages = [{"role": "user", "content": system_message}]
+
         # API call parameters
-        api_url = "https://api.anthropic.com/v1/complete"
+        api_url = "https://api.anthropic.com/v1/messages"
         headers = {
             "x-api-key": self.api_key,
             "anthropic-version": "2023-06-01",
             "content-type": "application/json",
+            "anthropic-beta": "max-tokens-3-5-sonnet-2024-07-15"
         }
         data = {
-            "model": "claude-2",
-            "max_tokens_to_sample": 8192,
-            "prompt": "\n\n".join([f"{msg['role']}: {msg['content']}" for msg in messages]) + "\n\nAssistant:",
-            "stop_sequences": ["\n\nHuman:"],
+            "model": "claude-3-5-sonnet-20240620",
+            "max_tokens": 8192,
+            "messages": messages
         }
-        
+
         try:
             # Show a loading message
             self.output_text.delete(1.0, tk.END)
@@ -439,9 +416,12 @@ class ClaudeApp(tk.Tk):
             response = requests.post(api_url, headers=headers, json=data)
             if response.status_code == 200:
                 result = response.json()
-                content = result['completion']
+                content = result['content']
                 # Extract text content
-                response_text = content.strip()
+                response_text = ""
+                for block in content:
+                    if block['type'] == 'text':
+                        response_text += block['text']
                 self.output_text.delete(1.0, tk.END)
                 self.output_text.insert(tk.END, response_text)
                 messagebox.showinfo("Success", "Paper generated.")
@@ -464,6 +444,13 @@ class ClaudeApp(tk.Tk):
             try:
                 document = Document()
                 
+                # Set default font and size
+                style = document.styles['Normal']
+                font = style.font
+                font.name = 'Times New Roman'
+                font.size = Pt(12)
+                style.paragraph_format.line_spacing = 1.5
+
                 # Document settings
                 section = document.sections[0]
                 section.page_height = Inches(11)
@@ -473,40 +460,50 @@ class ClaudeApp(tk.Tk):
                 section.top_margin = Inches(1)
                 section.bottom_margin = Inches(1)
                 
+                # Add headers and footers
+                self._add_header_and_footer(document.sections[0])
+                
                 # Define styles
                 styles = document.styles
                 
-                # Title style
                 style_title = styles.add_style('TitleStyle', WD_STYLE_TYPE.PARAGRAPH)
+                style_title.font.name = 'Times New Roman'
                 style_title.font.size = Pt(20)
                 style_title.font.bold = True
+                style_title.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                style_title.paragraph_format.line_spacing = 1.5
                 
-                # Heading 1 style
                 style_heading1 = styles.add_style('Heading1', WD_STYLE_TYPE.PARAGRAPH)
                 style_heading1.base_style = styles['Heading 1']
+                style_heading1.font.name = 'Times New Roman'
                 style_heading1.font.size = Pt(16)
                 style_heading1.font.bold = True
+                style_heading1.paragraph_format.line_spacing = 1.5
                 
-                # Heading 2 style
                 style_heading2 = styles.add_style('Heading2', WD_STYLE_TYPE.PARAGRAPH)
                 style_heading2.base_style = styles['Heading 2']
+                style_heading2.font.name = 'Times New Roman'
                 style_heading2.font.size = Pt(14)
                 style_heading2.font.bold = True
+                style_heading2.paragraph_format.line_spacing = 1.5
                 
-                # Heading 3 style
                 style_heading3 = styles.add_style('Heading3', WD_STYLE_TYPE.PARAGRAPH)
                 style_heading3.base_style = styles['Heading 3']
+                style_heading3.font.name = 'Times New Roman'
                 style_heading3.font.size = Pt(12)
                 style_heading3.font.bold = True
+                style_heading3.paragraph_format.line_spacing = 1.5
                 
-                # Normal text style
                 style_normal = styles['Normal']
+                style_normal.font.name = 'Times New Roman'
                 style_normal.font.size = Pt(12)
+                style_normal.paragraph_format.line_spacing = 1.5
                 
-                # Citation style
                 style_citation = styles.add_style('Citation', WD_STYLE_TYPE.PARAGRAPH)
+                style_citation.font.name = 'Times New Roman'
                 style_citation.font.size = Pt(12)
                 style_citation.font.italic = True
+                style_citation.paragraph_format.line_spacing = 1.5
                 
                 # Convert Markdown to HTML
                 html = markdown.markdown(output)
@@ -517,57 +514,61 @@ class ClaudeApp(tk.Tk):
                 # Process the HTML elements
                 for element in soup.descendants:
                     if element.name == 'h1':
-                        # Title
-                        p = document.add_paragraph(element.get_text(strip=True), style='TitleStyle')
+                        text = element.get_text(strip=True)
+                        if 'title page' in text.lower():
+                            continue
+                        p = document.add_paragraph(text, style='TitleStyle')
                         p.alignment = WD_ALIGN_PARAGRAPH.CENTER
                     elif element.name == 'h2':
-                        # Heading level 1
                         heading = element.get_text(strip=True)
                         if heading.lower() == 'bibliography':
                             document.add_page_break()
                         document.add_paragraph(heading, style='Heading1')
                     elif element.name == 'h3':
-                        # Heading level 2
                         document.add_paragraph(element.get_text(strip=True), style='Heading2')
                     elif element.name == 'h4':
-                        # Heading level 3
                         document.add_paragraph(element.get_text(strip=True), style='Heading3')
                     elif element.name == 'p':
-                        # Regular paragraph
                         paragraph = document.add_paragraph(style='Normal')
                         self._add_runs(paragraph, element)
                     elif element.name == 'em' or element.name == 'i':
-                        pass  # Handled in _add_runs
+                        pass
                     elif element.name == 'strong' or element.name == 'b':
-                        pass  # Handled in _add_runs
+                        pass
                     elif element.name == 'ul':
-                        # Unordered list
                         for li in element.find_all('li', recursive=False):
                             paragraph = document.add_paragraph(style='List Bullet')
                             self._add_runs(paragraph, li)
                     elif element.name == 'ol':
-                        # Ordered list
                         for li in element.find_all('li', recursive=False):
                             paragraph = document.add_paragraph(style='List Number')
                             self._add_runs(paragraph, li)
                     elif element.name == 'blockquote':
-                        # Blockquote
                         paragraph = document.add_paragraph(style='Intense Quote')
                         self._add_runs(paragraph, element)
                 
-                # Add page numbers
-                self._add_page_numbers(document.sections[0])
-                
+                # Save the document
                 document.save(save_path)
                 messagebox.showinfo("Success", f"Output saved to {save_path}")
             except Exception as e:
                 messagebox.showerror("Error", f"Error saving Word file: {e}")
 
-    def _add_page_numbers(self, section):
+    def _add_header_and_footer(self, section):
+        # Header
+        header = section.header
+        header_paragraph = header.paragraphs[0]
+        header_paragraph.text = f"{self.first_name} {self.last_name} - {self.date}"
+        header_paragraph.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+        header_paragraph.style.font.name = 'Times New Roman'
+        header_paragraph.style.font.size = Pt(12)
+
+        # Footer
         footer = section.footer
-        paragraph = footer.paragraphs[0]
-        paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        run = paragraph.add_run()
+        footer_paragraph = footer.paragraphs[0]
+        footer_paragraph.style.font.name = 'Times New Roman'
+        footer_paragraph.style.font.size = Pt(12)
+        footer_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        run = footer_paragraph.add_run()
         fldSimple = OxmlElement('w:fldSimple')
         fldSimple.set(qn('w:instr'), 'PAGE')
         run._r.append(fldSimple)
@@ -595,8 +596,7 @@ class ClaudeApp(tk.Tk):
                             image_stream = BytesIO(response.content)
                             paragraph.add_run().add_picture(image_stream)
                     except Exception as e:
-                        pass  # Image couldn't be loaded
-            # Add more styles as needed
+                        pass
 
 if __name__ == "__main__":
     app = ClaudeApp()
