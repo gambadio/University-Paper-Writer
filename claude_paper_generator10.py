@@ -34,6 +34,9 @@ class ScriptsWindow(tk.Toplevel):
         upload_btn = ttk.Button(buttons_frame, text="Upload Script", command=self.upload_script)
         upload_btn.pack(side=tk.LEFT, padx=5)
 
+        add_text_btn = ttk.Button(buttons_frame, text="Add Text", command=self.add_text)
+        add_text_btn.pack(side=tk.LEFT, padx=5)
+
         move_up_btn = ttk.Button(buttons_frame, text="Move Up", command=self.move_up)
         move_up_btn.pack(side=tk.LEFT, padx=5)
 
@@ -54,6 +57,9 @@ class ScriptsWindow(tk.Toplevel):
         for file_path in file_paths:
             self.parent.upload_script(file_path)
         self.update_listbox()
+
+    def add_text(self):
+        AddTextWindow(self, "script")
 
     def move_up(self):
         selection = self.scripts_listbox.curselection()
@@ -79,6 +85,7 @@ class ScriptsWindow(tk.Toplevel):
             index = selection[0]
             del self.parent.scripts[index]
             self.update_listbox()
+            self.parent.save_script_texts()
 
     def update_listbox(self):
         self.scripts_listbox.delete(0, tk.END)
@@ -110,6 +117,9 @@ class InstructionsWindow(tk.Toplevel):
         upload_btn = ttk.Button(buttons_frame, text="Upload Instruction", command=self.upload_instruction)
         upload_btn.pack(side=tk.LEFT, padx=5)
 
+        add_text_btn = ttk.Button(buttons_frame, text="Add Text", command=self.add_text)
+        add_text_btn.pack(side=tk.LEFT, padx=5)
+
         move_up_btn = ttk.Button(buttons_frame, text="Move Up", command=self.move_up)
         move_up_btn.pack(side=tk.LEFT, padx=5)
 
@@ -130,6 +140,9 @@ class InstructionsWindow(tk.Toplevel):
         for file_path in file_paths:
             self.parent.upload_instruction(file_path)
         self.update_listbox()
+
+    def add_text(self):
+        AddTextWindow(self, "instruction")
 
     def move_up(self):
         selection = self.instructions_listbox.curselection()
@@ -155,6 +168,7 @@ class InstructionsWindow(tk.Toplevel):
             index = selection[0]
             del self.parent.instructions[index]
             self.update_listbox()
+            self.parent.save_instruction_texts()
 
     def update_listbox(self):
         self.instructions_listbox.delete(0, tk.END)
@@ -165,6 +179,45 @@ class InstructionsWindow(tk.Toplevel):
         self.parent.update_system_prompt()
         self.parent.save_all_settings()
         self.grab_release()
+        self.destroy()
+
+class AddTextWindow(tk.Toplevel):
+    def __init__(self, parent, text_type):
+        super().__init__(parent)
+        self.parent = parent
+        self.text_type = text_type
+        self.title(f"Add {text_type.capitalize()} Text")
+        self.geometry("500x400")
+        self.create_widgets()
+
+    def create_widgets(self):
+        ttk.Label(self, text="Title:").pack(pady=(10, 0))
+        self.title_entry = ttk.Entry(self, width=50)
+        self.title_entry.pack(pady=(0, 10))
+
+        ttk.Label(self, text="Text:").pack()
+        self.text_area = tk.Text(self, wrap=tk.WORD, width=60, height=15)
+        self.text_area.pack(pady=10, padx=10)
+
+        save_btn = ttk.Button(self, text="Save", command=self.save_text)
+        save_btn.pack(pady=10)
+
+    def save_text(self):
+        title = self.title_entry.get().strip()
+        text = self.text_area.get(1.0, tk.END).strip()
+
+        if not title or not text:
+            messagebox.showerror("Error", "Both title and text must be provided.")
+            return
+
+        if self.text_type == "script":
+            self.parent.parent.scripts.append((title, text))
+            self.parent.parent.save_script_texts()
+        elif self.text_type == "instruction":
+            self.parent.parent.instructions.append((title, text))
+            self.parent.parent.save_instruction_texts()
+
+        self.parent.update_listbox()
         self.destroy()
 
 class FormattingWindow(tk.Toplevel):
@@ -420,7 +473,32 @@ class ClaudeApp(tk.Tk):
         self.first_name = ""
         self.last_name = ""
         self.date = datetime.now().strftime("%Y-%m-%d")
-        self.custom_prompts = {}
+        self.custom_prompts = {
+            "Science Paper (Default)": self.default_system_prompt,
+            "Workbook Format": (
+                "Your specific instructions are:\n\n"
+                "{instructions}\n\n"
+                "The scripts are provided in the following format:\n\n"
+                "{scripts}\n\n"
+                "Please output the workbook in Markdown format with clear markers for headings and sections. "
+                "Use '#' for main headings, '##' for subheadings, and '###' for sub-subheadings. "
+                "Use **bold** and *italic* text where appropriate. Include bullet points and numbered lists if necessary. "
+                "Ensure that citations are properly formatted in Harvard style and included within the text. "
+                "At the beginning of the paper, include a title page containing the paper's title, your name, and date. "
+                "Enclose the title page content between '####TITLE PAGE####' and '####END TITLE PAGE####'.\n\n"
+                "####TITLE PAGE####\n"
+                "# [Title of the Paper]\n"
+                "Author: {first_name} {last_name}\n"
+                "Date: {date}\n"
+                "####END TITLE PAGE####\n\n"
+                "IMPORTANT: IF THE INSTRUCTIONS OR DETAILS SUCH AS TITLE PAGE,BIBLIOGRAPHY, CITATION STYLE, ETC., "
+                "ARE PROVIDED REGARDING STRUCTURING THE PAPER,PLEASE FOLLOW THOSE INSTEAD OF THE ONES LISTED ABOVE. "
+                "MAKE USE OF FULL MAX TOKEN OUTPUT OF 8192, WRITE AS MUCH AS POSSIBLE.\n\n"
+                "IMPORTANT 2: JUST USE SOURCES THAT WERE PROVIDED TO YOU HERE IN THIS TEXT: "
+                "DON'T INVENT ANY SOURCES EVER. I REPEAT, JUST USE SOURCE THAT WERE PROVIDED TO YOU IN THE SYSTEM MESSAGE. "
+                "ALSO CITATIONS SHOULD NEVER BE INVENTED AND ALWAYS BASED ON THE PROVIDED TEXTS."
+            )
+        }
 
         # Formatting options
         self.font_name = "Times New Roman"
@@ -565,6 +643,7 @@ class ClaudeApp(tk.Tk):
                     self.scripts.append((file_name, text))
                 except Exception as e:
                     messagebox.showerror("Error", f"Error reading text file {file_name}: {e}")
+        self.save_script_texts()
 
     def upload_instruction(self, file_path):
         file_name = os.path.basename(file_path)
@@ -594,6 +673,7 @@ class ClaudeApp(tk.Tk):
                     self.instructions.append((file_name, text))
                 except Exception as e:
                     messagebox.showerror("Error", f"Error reading text file {file_name}: {e}")
+        self.save_instruction_texts()
 
     def update_system_prompt(self):
         formatted_instructions = "\n\n".join([f"Instruction {i+1} ({name}):\n{content}\n!!!this is the next document!!!" for i, (name, content) in enumerate(self.instructions)])
@@ -742,7 +822,10 @@ class ClaudeApp(tk.Tk):
                             i += 1
                         # Add Title Page
                         for line in title_page_content:
-                            p = document.add_paragraph(line, style='TitleStyle')
+                            if line.startswith('#'):
+                                p = document.add_paragraph(line.lstrip('#').strip(), style='TitleStyle')
+                            else:
+                                p = document.add_paragraph(line, style='Normal')
                             p.alignment = WD_ALIGN_PARAGRAPH.CENTER
                         document.add_page_break()
                         i += 1
@@ -845,9 +928,12 @@ class ClaudeApp(tk.Tk):
                 self.margin_left = settings.get('margin_left', 2.0)
                 self.margin_right = settings.get('margin_right', 2.0)
                 self.system_prompt = settings.get('system_prompt', self.default_system_prompt)
-                self.custom_prompts = settings.get('custom_prompts', {})
+                self.custom_prompts = settings.get('custom_prompts', self.custom_prompts)
         except FileNotFoundError:
             pass  # It's okay if the file doesn't exist yet
+
+        self.load_script_texts()
+        self.load_instruction_texts()
 
     def save_all_settings(self):
         settings = {
@@ -877,6 +963,34 @@ class ClaudeApp(tk.Tk):
         self.system_prompt_text.delete(1.0, tk.END)
         self.system_prompt_text.insert(tk.END, self.default_system_prompt)
         messagebox.showinfo("System Prompt", "System prompt reset to default.")
+
+    def save_script_texts(self):
+        try:
+            with open('script_texts.json', 'w') as f:
+                json.dump(self.scripts, f)
+        except Exception as e:
+            messagebox.showerror("Error", f"Error saving script texts: {e}")
+
+    def load_script_texts(self):
+        try:
+            with open('script_texts.json', 'r') as f:
+                self.scripts = json.load(f)
+        except FileNotFoundError:
+            self.scripts = []
+
+    def save_instruction_texts(self):
+        try:
+            with open('instruction_texts.json', 'w') as f:
+                json.dump(self.instructions, f)
+        except Exception as e:
+            messagebox.showerror("Error", f"Error saving instruction texts: {e}")
+
+    def load_instruction_texts(self):
+        try:
+            with open('instruction_texts.json', 'r') as f:
+                self.instructions = json.load(f)
+        except FileNotFoundError:
+            self.instructions = []
 
 if __name__ == "__main__":
     app = ClaudeApp()
