@@ -1,10 +1,11 @@
 import tkinter as tk
-from tkinter import filedialog, messagebox, ttk
+from tkinter import filedialog, messagebox
+from tkinter import ttk
 import requests
 import os
 import PyPDF2
 from docx import Document
-from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_BREAK
+from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.enum.style import WD_STYLE_TYPE
 from docx.shared import Pt, Inches, Cm
 from docx.oxml import OxmlElement
@@ -21,7 +22,6 @@ class ScriptsWindow(tk.Toplevel):
         self.title("Manage Scripts")
         self.geometry("600x400")
         self.grab_set()  # Make the window modal
-        
         self.create_widgets()
 
     def create_widgets(self):
@@ -85,7 +85,7 @@ class ScriptsWindow(tk.Toplevel):
 
     def save_changes(self):
         self.parent.update_system_prompt()
-        self.parent.save_settings()
+        self.parent.save_all_settings()
         messagebox.showinfo("Success", "Changes saved and system prompt updated.")
 
     def update_listbox(self):
@@ -104,7 +104,6 @@ class InstructionsWindow(tk.Toplevel):
         self.title("Manage Instructions")
         self.geometry("600x400")
         self.grab_set()  # Make the window modal
-        
         self.create_widgets()
 
     def create_widgets(self):
@@ -168,7 +167,7 @@ class InstructionsWindow(tk.Toplevel):
 
     def save_changes(self):
         self.parent.update_system_prompt()
-        self.parent.save_settings()
+        self.parent.save_all_settings()
         messagebox.showinfo("Success", "Changes saved and system prompt updated.")
 
     def update_listbox(self):
@@ -180,14 +179,12 @@ class InstructionsWindow(tk.Toplevel):
         self.grab_release()  # Release the modal state before destroying
         super().destroy()
 
-
 class FormattingWindow(tk.Toplevel):
     def __init__(self, parent):
         super().__init__(parent)
         self.parent = parent
         self.title("Formatting Options")
         self.geometry("400x500")
-        
         self.create_widgets()
 
     def create_widgets(self):
@@ -271,7 +268,7 @@ class FormattingWindow(tk.Toplevel):
         self.parent.margin_bottom = self.margin_bottom_var.get()
         self.parent.margin_left = self.margin_left_var.get()
         self.parent.margin_right = self.margin_right_var.get()
-        self.parent.save_settings()
+        self.parent.save_all_settings()
         self.destroy()
 
     def set_default_formatting(self):
@@ -286,12 +283,63 @@ class FormattingWindow(tk.Toplevel):
         self.margin_left_var.set(2.0)
         self.margin_right_var.set(2.0)
 
+class SettingsWindow(tk.Toplevel):
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.parent = parent
+        self.title("Settings")
+        self.geometry("400x300")
+        self.grab_set()  # Make the window modal
+        self.create_widgets()
+
+    def create_widgets(self):
+        main_frame = ttk.Frame(self, padding="20")
+        main_frame.pack(expand=True, fill=tk.BOTH)
+
+        ttk.Label(main_frame, text="API Key:").grid(row=0, column=0, sticky=tk.W, pady=5)
+        self.api_key_entry = ttk.Entry(main_frame, width=40, show="*")
+        self.api_key_entry.grid(row=0, column=1, pady=5)
+        self.api_key_entry.insert(0, self.parent.api_key)
+
+        ttk.Label(main_frame, text="First Name:").grid(row=1, column=0, sticky=tk.W, pady=5)
+        self.first_name_entry = ttk.Entry(main_frame, width=40)
+        self.first_name_entry.grid(row=1, column=1, pady=5)
+        self.first_name_entry.insert(0, self.parent.first_name)
+
+        ttk.Label(main_frame, text="Last Name:").grid(row=2, column=0, sticky=tk.W, pady=5)
+        self.last_name_entry = ttk.Entry(main_frame, width=40)
+        self.last_name_entry.grid(row=2, column=1, pady=5)
+        self.last_name_entry.insert(0, self.parent.last_name)
+
+        ttk.Label(main_frame, text="Date (YYYY-MM-DD):").grid(row=3, column=0, sticky=tk.W, pady=5)
+        self.date_entry = ttk.Entry(main_frame, width=40)
+        self.date_entry.grid(row=3, column=1, pady=5)
+        self.date_entry.insert(0, self.parent.date)
+
+        save_btn = ttk.Button(main_frame, text="Save", command=self.save_settings)
+        save_btn.grid(row=4, column=0, pady=20)
+
+        close_btn = ttk.Button(main_frame, text="Close", command=self.destroy)
+        close_btn.grid(row=4, column=1, pady=20)
+
+    def save_settings(self):
+        self.parent.api_key = self.api_key_entry.get().strip()
+        self.parent.first_name = self.first_name_entry.get().strip()
+        self.parent.last_name = self.last_name_entry.get().strip()
+        self.parent.date = self.date_entry.get().strip()
+        self.parent.save_all_settings()
+        messagebox.showinfo("Settings", "Settings saved successfully.")
+
+    def destroy(self):
+        self.grab_release()
+        super().destroy()
+
 class ClaudeApp(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("University Paper Generator")
         self.geometry("800x600")
-        
+
         # Initialize variables
         self.api_key = ""
         self.default_system_prompt = (
@@ -313,20 +361,14 @@ class ClaudeApp(tk.Tk):
             "Ensure that citations are properly formatted in Harvard style and included within the text. "
             "At the beginning of the paper, include a title page containing the paper's title, your name, and date. "
             "Enclose the title page content between '####TITLE PAGE####' and '####END TITLE PAGE####'.\n\n"
-            "The structure of the paper should be:\n\n"
-            "####TITLE PAGE####\n"
-            "# [Title of the Paper]\n"
-            "Author: {first_name} {last_name}\n"
-            "Date: {date}\n"
-            "####END TITLE PAGE####\n\n"
             "# Introduction\n"
             "...\n\n"
             "# Conclusion\n"
             "...\n\n"
             "# Bibliography\n"
             "...\n\n"
-            "IMPORTANT: IF THE INSTRUCTIONS OR DETAILS SUCH AS TITLE PAGE,"
-            "BIBLIOGRAPHY, CITATION STYLE, ETC., ARE PROVIDED REGARDING STRUCTURING THE PAPER,"
+            "IMPORTANT: IF THE INSTRUCTIONS OR DETAILS SUCH AS TITLE PAGE, "
+            "BIBLIOGRAPHY, CITATION STYLE, ETC., ARE PROVIDED REGARDING STRUCTURING THE PAPER, "
             "PLEASE FOLLOW THOSE INSTEAD OF THE ONES LISTED ABOVE. MAKE USE OF FULL MAX TOKEN OUTPUT OF 8192"
         )
         self.system_prompt = self.default_system_prompt
@@ -349,14 +391,23 @@ class ClaudeApp(tk.Tk):
         self.margin_right = 2.0
 
         # Load saved settings
-        self.load_settings()
+        self.load_all_settings()
 
         # Build UI
         self.create_widgets()
-    
+
     def create_widgets(self):
         style = ttk.Style()
         style.theme_use('clam')
+
+        # Define styles for custom button colors
+        style.configure("Green.TButton", foreground="black", background="lightgreen")
+        style.map("Green.TButton",
+                  background=[('active', 'green')])
+
+        style.configure("Blue.TButton", foreground="black", background="lightblue")
+        style.map("Blue.TButton",
+                  background=[('active', 'blue')])
 
         main_frame = ttk.Frame(self, padding="10")
         main_frame.pack(fill=tk.BOTH, expand=True)
@@ -383,17 +434,29 @@ class ClaudeApp(tk.Tk):
         buttons_frame = ttk.Frame(main_frame)
         buttons_frame.grid(row=2, column=0, columnspan=3, pady=10)
 
-        ttk.Button(buttons_frame, text="Manage Scripts", command=self.open_scripts_window).pack(side=tk.LEFT, padx=5)
-        ttk.Button(buttons_frame, text="Manage Instructions", command=self.open_instructions_window).pack(side=tk.LEFT, padx=5)
-        ttk.Button(buttons_frame, text="Generate Paper", command=self.send_request).pack(side=tk.LEFT, padx=5)
-        ttk.Button(buttons_frame, text="Save Output", command=self.save_output).pack(side=tk.LEFT, padx=5)
-        ttk.Button(buttons_frame, text="Save All Settings", command=self.save_all_settings).pack(side=tk.LEFT, padx=5)
-        ttk.Button(buttons_frame, text="Reset System Prompt", command=self.reset_system_prompt).pack(side=tk.LEFT, padx=5)
+        manage_scripts_btn = ttk.Button(buttons_frame, text="Manage Scripts", command=self.open_scripts_window)
+        manage_scripts_btn.pack(side=tk.LEFT, padx=5)
+
+        manage_instructions_btn = ttk.Button(buttons_frame, text="Manage Instructions", command=self.open_instructions_window)
+        manage_instructions_btn.pack(side=tk.LEFT, padx=5)
+
+        generate_paper_btn = ttk.Button(buttons_frame, text="Generate Paper", command=self.send_request, style="Green.TButton")
+        generate_paper_btn.pack(side=tk.LEFT, padx=5)
+
+        save_output_btn = ttk.Button(buttons_frame, text="Save Output", command=self.save_output, style="Blue.TButton")
+        save_output_btn.pack(side=tk.LEFT, padx=5)
+
+        save_settings_btn = ttk.Button(buttons_frame, text="Save All Settings", command=self.save_all_settings)
+        save_settings_btn.pack(side=tk.LEFT, padx=5)
+
+        reset_system_prompt_btn = ttk.Button(buttons_frame, text="Reset System Prompt", command=self.reset_system_prompt)
+        reset_system_prompt_btn.pack(side=tk.LEFT, padx=5)
 
         # Output Text Area
         self.output_text = tk.Text(main_frame, wrap=tk.WORD, height=20)
         self.output_text.grid(row=3, column=0, columnspan=3, pady=10, sticky=tk.W+tk.E+tk.N+tk.S)
 
+        # Configure grid weights
         main_frame.columnconfigure(1, weight=1)
         main_frame.rowconfigure(1, weight=1)
         main_frame.rowconfigure(3, weight=2)
@@ -413,6 +476,7 @@ class ClaudeApp(tk.Tk):
     def upload_script(self, file_path):
         file_name = os.path.basename(file_path)
         file_extension = os.path.splitext(file_path)[1].lower()
+
         if file_extension == '.pdf':
             # Extract text from PDF
             try:
@@ -443,6 +507,7 @@ class ClaudeApp(tk.Tk):
     def upload_instruction(self, file_path):
         file_name = os.path.basename(file_path)
         file_extension = os.path.splitext(file_path)[1].lower()
+
         if file_extension == '.pdf':
             # Extract text from PDF
             try:
@@ -494,14 +559,14 @@ class ClaudeApp(tk.Tk):
         if not self.api_key:
             messagebox.showerror("Error", "Please enter your API key in the settings.")
             return
-        
+
         self.update_system_prompt()
-        
+
         # Prepare the messages
         messages = [
             {"role": "user", "content": self.system_prompt}
         ]
-        
+
         # API call parameters
         api_url = "https://api.anthropic.com/v1/messages"
         headers = {
@@ -521,8 +586,9 @@ class ClaudeApp(tk.Tk):
             self.output_text.delete(1.0, tk.END)
             self.output_text.insert(tk.END, "Generating response, please wait...")
             self.update_idletasks()
-            
+
             response = requests.post(api_url, headers=headers, json=data)
+
             if response.status_code == 200:
                 result = response.json()
                 content = result['content'][0]['text']
@@ -543,12 +609,12 @@ class ClaudeApp(tk.Tk):
         if not output:
             messagebox.showerror("Error", "No output to save.")
             return
-        save_path = filedialog.asksaveasfilename(title="Save Output as Word File", defaultextension=".docx",
-                                                 filetypes=[("Word Document", "*.docx")])
+
+        save_path = filedialog.asksaveasfilename(title="Save Output as Word File", defaultextension=".docx", filetypes=[("Word Document", "*.docx")])
         if save_path:
             try:
                 document = Document()
-                
+
                 # Document settings
                 section = document.sections[0]
                 section.page_height = Inches(11)
@@ -557,87 +623,129 @@ class ClaudeApp(tk.Tk):
                 section.right_margin = Cm(self.margin_right)
                 section.top_margin = Cm(self.margin_top)
                 section.bottom_margin = Cm(self.margin_bottom)
-                
+
                 # Define styles
                 styles = document.styles
-                
+
                 # Title style
                 style_title = styles.add_style('TitleStyle', WD_STYLE_TYPE.PARAGRAPH)
                 style_title.font.size = Pt(self.font_size_heading1)
                 style_title.font.bold = True
                 style_title.font.name = self.font_name
-                
+
                 # Heading 1 style
                 style_heading1 = styles.add_style('Heading1Custom', WD_STYLE_TYPE.PARAGRAPH)
                 style_heading1.base_style = styles['Heading 1']
                 style_heading1.font.size = Pt(self.font_size_heading1)
                 style_heading1.font.bold = True
                 style_heading1.font.name = self.font_name
-                
+
                 # Heading 2 style
                 style_heading2 = styles.add_style('Heading2Custom', WD_STYLE_TYPE.PARAGRAPH)
                 style_heading2.base_style = styles['Heading 2']
                 style_heading2.font.size = Pt(self.font_size_heading2)
                 style_heading2.font.bold = True
                 style_heading2.font.name = self.font_name
-                
+
                 # Heading 3 style
                 style_heading3 = styles.add_style('Heading3Custom', WD_STYLE_TYPE.PARAGRAPH)
                 style_heading3.base_style = styles['Heading 3']
                 style_heading3.font.size = Pt(self.font_size_heading3)
                 style_heading3.font.bold = True
                 style_heading3.font.name = self.font_name
-                
+
                 # Normal text style
                 style_normal = styles['Normal']
                 style_normal.font.size = Pt(self.font_size_normal)
                 style_normal.font.name = self.font_name
-                
+
                 # Set line spacing for paragraph styles
                 line_spacing = 1.0 if self.line_spacing == "Single" else 1.5 if self.line_spacing == "1.5 lines" else 2.0
                 for style in [style_normal, style_title, style_heading1, style_heading2, style_heading3]:
-                    style.paragraph_format.line_spacing = line_spacing
+                    style.paragraph_format.line_spacing = Pt(line_spacing * 12)  # Approximation
 
                 # Process the content
                 paragraphs = output.strip().split('\n')
-
-                for para in paragraphs:
-                    para = para.strip()
+                i = 0
+                while i < len(paragraphs):
+                    para = paragraphs[i].strip()
                     if not para:
+                        i += 1
                         continue
+
+                    # Handle Title Page
+                    if para == '####TITLE PAGE####':
+                        title_page_content = []
+                        i += 1
+                        while i < len(paragraphs) and paragraphs[i].strip() != '####END TITLE PAGE####':
+                            title_page_content.append(paragraphs[i].strip())
+                            i += 1
+                        # Add Title Page
+                        for line in title_page_content:
+                            p = document.add_paragraph(line, style='TitleStyle')
+                            p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                        i += 1
+                        continue
+
+                    # Handle Headings
                     if para.startswith('# '):
-                        # Heading level 1
-                        document.add_paragraph(para[2:].strip(), style='Heading1Custom')
+                        document.add_heading(para[2:].strip(), level=1)
                     elif para.startswith('## '):
-                        # Heading level 2
-                        document.add_paragraph(para[3:].strip(), style='Heading2Custom')
+                        document.add_heading(para[3:].strip(), level=2)
                     elif para.startswith('### '):
-                        # Heading level 3
-                        document.add_paragraph(para[4:].strip(), style='Heading3Custom')
+                        document.add_heading(para[4:].strip(), level=3)
                     elif re.match(r'^\d+\.', para):
                         # Numbered list
-                        items = para.split('\n')
-                        for item in items:
-                            p = document.add_paragraph(style='List Number')
-                            p.add_run(item.strip())
+                        p = document.add_paragraph(style='List Number')
+                        self._add_runs(p, para)
                     elif para.startswith('- '):
                         # Bullet list
-                        items = para.split('\n')
-                        for item in items:
-                            p = document.add_paragraph(style='List Bullet')
-                            p.add_run(item[2:].strip())
+                        p = document.add_paragraph(style='List Bullet')
+                        self._add_runs(p, para[2:].strip())
+                    elif para.startswith('|') and para.endswith('|'):
+                        # Possible Markdown Table
+                        table_lines = [para]
+                        i += 1
+                        while i < len(paragraphs) and paragraphs[i].strip().startswith('|') and paragraphs[i].strip().endswith('|'):
+                            table_lines.append(paragraphs[i].strip())
+                            i += 1
+                        i -= 1  # Adjust for the outer loop
+                        table = self._parse_markdown_table(table_lines)
+                        if table:
+                            document.add_table(rows=0, cols=len(table[0]))
+                            word_table = document.add_table(rows=len(table), cols=len(table[0]))
+                            for row_idx, row in enumerate(table):
+                                for col_idx, cell in enumerate(row):
+                                    word_table.cell(row_idx, col_idx).text = cell
+                            for row in word_table.rows:
+                                for cell in row.cells:
+                                    for paragraph in cell.paragraphs:
+                                        paragraph.alignment = WD_ALIGN_PARAGRAPH.LEFT
                     else:
                         # Regular paragraph
                         p = document.add_paragraph(style='Normal')
                         self._add_runs(p, para)
+                    i += 1
 
                 # Add page numbers
                 self._add_page_numbers(document.sections[0])
 
+                # Save the document
                 document.save(save_path)
                 messagebox.showinfo("Success", f"Output saved to {save_path}")
             except Exception as e:
                 messagebox.showerror("Error", f"Error saving Word file: {e}")
+
+    def _parse_markdown_table(self, table_lines):
+        try:
+            # Split each line by '|' and remove empty strings
+            table = []
+            for line in table_lines:
+                cells = [cell.strip() for cell in line.strip('|').split('|')]
+                table.append(cells)
+            return table
+        except Exception:
+            return None
 
     def _add_page_numbers(self, section):
         footer = section.footer
@@ -661,7 +769,7 @@ class ClaudeApp(tk.Tk):
             else:
                 paragraph.add_run(part)
 
-    def load_settings(self):
+    def load_all_settings(self):
         try:
             with open('claude_app_settings.json', 'r') as f:
                 settings = json.load(f)
@@ -700,9 +808,12 @@ class ClaudeApp(tk.Tk):
             'margin_right': self.margin_right,
             'system_prompt': self.system_prompt
         }
-        with open('claude_app_settings.json', 'w') as f:
-            json.dump(settings, f)
-        messagebox.showinfo("Settings", "All settings saved successfully.")
+        try:
+            with open('claude_app_settings.json', 'w') as f:
+                json.dump(settings, f)
+            messagebox.showinfo("Settings", "All settings saved successfully.")
+        except Exception as e:
+            messagebox.showerror("Error", f"Error saving settings: {e}")
 
     def reset_system_prompt(self):
         self.system_prompt_text.delete(1.0, tk.END)
