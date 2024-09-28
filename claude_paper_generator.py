@@ -1,13 +1,12 @@
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
-from tkinter import PhotoImage
 import requests
 import os
 import PyPDF2
 from docx import Document
 from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_BREAK
 from docx.enum.style import WD_STYLE_TYPE
-from docx.shared import Pt, Inches
+from docx.shared import Pt, Inches, Cm
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.enum.section import WD_SECTION_START
@@ -20,12 +19,13 @@ class ScriptsWindow(tk.Toplevel):
         super().__init__(parent)
         self.parent = parent
         self.title("Manage Scripts")
-        self.geometry("500x400")
-        self.attributes('-topmost', True)
+        self.geometry("600x400")
+        self.grab_set()  # Make the window modal
+        
         self.create_widgets()
 
     def create_widgets(self):
-        self.scripts_listbox = tk.Listbox(self, width=70, height=15)
+        self.scripts_listbox = tk.Listbox(self, width=80, height=15)
         self.scripts_listbox.pack(pady=10, padx=10, fill=tk.BOTH, expand=True)
 
         buttons_frame = ttk.Frame(self)
@@ -43,7 +43,7 @@ class ScriptsWindow(tk.Toplevel):
         delete_btn = ttk.Button(buttons_frame, text="Delete Selected", command=self.delete_selected)
         delete_btn.pack(side=tk.LEFT, padx=5)
 
-        save_btn = ttk.Button(buttons_frame, text="Save", command=self.parent.save_settings)
+        save_btn = ttk.Button(buttons_frame, text="Save Changes", command=self.save_changes)
         save_btn.pack(side=tk.LEFT, padx=5)
 
         close_btn = ttk.Button(buttons_frame, text="Close", command=self.destroy)
@@ -83,22 +83,32 @@ class ScriptsWindow(tk.Toplevel):
             del self.parent.scripts[index]
             self.update_listbox()
 
+    def save_changes(self):
+        self.parent.update_system_prompt()
+        self.parent.save_settings()
+        messagebox.showinfo("Success", "Changes saved and system prompt updated.")
+
     def update_listbox(self):
         self.scripts_listbox.delete(0, tk.END)
         for script in self.parent.scripts:
             self.scripts_listbox.insert(tk.END, script[0])
+
+    def destroy(self):
+        self.grab_release()  # Release the modal state before destroying
+        super().destroy()
 
 class InstructionsWindow(tk.Toplevel):
     def __init__(self, parent):
         super().__init__(parent)
         self.parent = parent
         self.title("Manage Instructions")
-        self.geometry("500x400")
-        self.attributes('-topmost', True)
+        self.geometry("600x400")
+        self.grab_set()  # Make the window modal
+        
         self.create_widgets()
 
     def create_widgets(self):
-        self.instructions_listbox = tk.Listbox(self, width=70, height=15)
+        self.instructions_listbox = tk.Listbox(self, width=80, height=15)
         self.instructions_listbox.pack(pady=10, padx=10, fill=tk.BOTH, expand=True)
 
         buttons_frame = ttk.Frame(self)
@@ -116,7 +126,7 @@ class InstructionsWindow(tk.Toplevel):
         delete_btn = ttk.Button(buttons_frame, text="Delete Selected", command=self.delete_selected)
         delete_btn.pack(side=tk.LEFT, padx=5)
 
-        save_btn = ttk.Button(buttons_frame, text="Save", command=self.parent.save_settings)
+        save_btn = ttk.Button(buttons_frame, text="Save Changes", command=self.save_changes)
         save_btn.pack(side=tk.LEFT, padx=5)
 
         close_btn = ttk.Button(buttons_frame, text="Close", command=self.destroy)
@@ -156,65 +166,20 @@ class InstructionsWindow(tk.Toplevel):
             del self.parent.instructions[index]
             self.update_listbox()
 
+    def save_changes(self):
+        self.parent.update_system_prompt()
+        self.parent.save_settings()
+        messagebox.showinfo("Success", "Changes saved and system prompt updated.")
+
     def update_listbox(self):
         self.instructions_listbox.delete(0, tk.END)
         for instruction in self.parent.instructions:
             self.instructions_listbox.insert(tk.END, instruction[0])
 
-class SettingsWindow(tk.Toplevel):
-    def __init__(self, parent):
-        super().__init__(parent)
-        self.parent = parent
-        self.title("Settings")
-        self.geometry("400x300")
-        self.attributes('-topmost', True)
-        self.create_widgets()
+    def destroy(self):
+        self.grab_release()  # Release the modal state before destroying
+        super().destroy()
 
-    def create_widgets(self):
-        main_frame = ttk.Frame(self, padding="10")
-        main_frame.pack(fill=tk.BOTH, expand=True)
-
-        # API Key
-        ttk.Label(main_frame, text="API Key:").grid(row=0, column=0, sticky=tk.W, pady=5)
-        self.api_key_entry = ttk.Entry(main_frame, width=40, show='*')
-        self.api_key_entry.grid(row=0, column=1, pady=5, padx=5, sticky=tk.W+tk.E)
-        self.api_key_entry.insert(0, self.parent.api_key)
-
-        # First Name
-        ttk.Label(main_frame, text="First Name:").grid(row=1, column=0, sticky=tk.W, pady=5)
-        self.first_name_entry = ttk.Entry(main_frame, width=40)
-        self.first_name_entry.grid(row=1, column=1, pady=5, padx=5, sticky=tk.W+tk.E)
-        self.first_name_entry.insert(0, self.parent.first_name)
-
-        # Last Name
-        ttk.Label(main_frame, text="Last Name:").grid(row=2, column=0, sticky=tk.W, pady=5)
-        self.last_name_entry = ttk.Entry(main_frame, width=40)
-        self.last_name_entry.grid(row=2, column=1, pady=5, padx=5, sticky=tk.W+tk.E)
-        self.last_name_entry.insert(0, self.parent.last_name)
-
-        # Date
-        ttk.Label(main_frame, text="Date:").grid(row=3, column=0, sticky=tk.W, pady=5)
-        self.date_entry = ttk.Entry(main_frame, width=40)
-        self.date_entry.grid(row=3, column=1, pady=5, padx=5, sticky=tk.W+tk.E)
-        self.date_entry.insert(0, self.parent.date)
-
-        # Buttons
-        buttons_frame = ttk.Frame(main_frame)
-        buttons_frame.grid(row=4, column=0, columnspan=2, pady=20)
-
-        save_btn = ttk.Button(buttons_frame, text="Save", command=self.save_settings)
-        save_btn.pack(side=tk.LEFT, padx=5)
-
-        close_btn = ttk.Button(buttons_frame, text="Close", command=self.destroy)
-        close_btn.pack(side=tk.RIGHT, padx=5)
-
-    def save_settings(self):
-        self.parent.api_key = self.api_key_entry.get()
-        self.parent.first_name = self.first_name_entry.get()
-        self.parent.last_name = self.last_name_entry.get()
-        self.parent.date = self.date_entry.get()
-        self.parent.save_settings()
-        messagebox.showinfo("Settings", "Settings saved successfully.")
 
 class FormattingWindow(tk.Toplevel):
     def __init__(self, parent):
@@ -222,109 +187,94 @@ class FormattingWindow(tk.Toplevel):
         self.parent = parent
         self.title("Formatting Options")
         self.geometry("400x500")
-        self.attributes('-topmost', True)
+        
         self.create_widgets()
 
     def create_widgets(self):
-        main_frame = ttk.Frame(self, padding="10")
-        main_frame.pack(fill=tk.BOTH, expand=True)
+        main_frame = ttk.Frame(self, padding="20")
+        main_frame.pack(expand=True)
 
-        # Font Name
         ttk.Label(main_frame, text="Font Name:").grid(row=0, column=0, sticky=tk.W, pady=5)
         self.font_name_var = tk.StringVar(value=self.parent.font_name)
         font_options = ["Times New Roman", "Arial", "Calibri", "Cambria", "Verdana"]
-        self.font_name_combobox = ttk.Combobox(main_frame, textvariable=self.font_name_var, values=font_options, state="readonly")
+        self.font_name_combobox = ttk.Combobox(main_frame, textvariable=self.font_name_var, values=font_options, state="readonly", width=30)
         self.font_name_combobox.grid(row=0, column=1, sticky=tk.W+tk.E, pady=5, padx=5)
 
-        # Line Spacing
         ttk.Label(main_frame, text="Line Spacing:").grid(row=1, column=0, sticky=tk.W, pady=5)
         self.line_spacing_var = tk.StringVar(value=self.parent.line_spacing)
         line_spacing_options = ["Single", "1.5 lines", "Double"]
-        self.line_spacing_combobox = ttk.Combobox(main_frame, textvariable=self.line_spacing_var, values=line_spacing_options, state="readonly")
+        self.line_spacing_combobox = ttk.Combobox(main_frame, textvariable=self.line_spacing_var, values=line_spacing_options, state="readonly", width=30)
         self.line_spacing_combobox.grid(row=1, column=1, sticky=tk.W+tk.E, pady=5, padx=5)
 
-        # Font Sizes
         ttk.Label(main_frame, text="Font Sizes (pt):").grid(row=2, column=0, sticky=tk.W, pady=5)
         sizes_frame = ttk.Frame(main_frame)
         sizes_frame.grid(row=2, column=1, sticky=tk.W+tk.E, pady=5, padx=5)
-        sizes_frame.columnconfigure(1, weight=1)
 
         ttk.Label(sizes_frame, text="Normal Text:").grid(row=0, column=0, sticky=tk.W)
         self.font_size_normal_var = tk.IntVar(value=self.parent.font_size_normal)
-        self.font_size_normal_spinbox = ttk.Spinbox(sizes_frame, from_=8, to=72, textvariable=self.font_size_normal_var)
+        self.font_size_normal_spinbox = ttk.Spinbox(sizes_frame, from_=8, to=72, textvariable=self.font_size_normal_var, width=5)
         self.font_size_normal_spinbox.grid(row=0, column=1, sticky=tk.W+tk.E)
 
         ttk.Label(sizes_frame, text="Heading 1:").grid(row=1, column=0, sticky=tk.W)
         self.font_size_heading1_var = tk.IntVar(value=self.parent.font_size_heading1)
-        self.font_size_heading1_spinbox = ttk.Spinbox(sizes_frame, from_=8, to=72, textvariable=self.font_size_heading1_var)
+        self.font_size_heading1_spinbox = ttk.Spinbox(sizes_frame, from_=8, to=72, textvariable=self.font_size_heading1_var, width=5)
         self.font_size_heading1_spinbox.grid(row=1, column=1, sticky=tk.W+tk.E)
 
         ttk.Label(sizes_frame, text="Heading 2:").grid(row=2, column=0, sticky=tk.W)
         self.font_size_heading2_var = tk.IntVar(value=self.parent.font_size_heading2)
-        self.font_size_heading2_spinbox = ttk.Spinbox(sizes_frame, from_=8, to=72, textvariable=self.font_size_heading2_var)
+        self.font_size_heading2_spinbox = ttk.Spinbox(sizes_frame, from_=8, to=72, textvariable=self.font_size_heading2_var, width=5)
         self.font_size_heading2_spinbox.grid(row=2, column=1, sticky=tk.W+tk.E)
 
         ttk.Label(sizes_frame, text="Heading 3:").grid(row=3, column=0, sticky=tk.W)
         self.font_size_heading3_var = tk.IntVar(value=self.parent.font_size_heading3)
-        self.font_size_heading3_spinbox = ttk.Spinbox(sizes_frame, from_=8, to=72, textvariable=self.font_size_heading3_var)
+        self.font_size_heading3_spinbox = ttk.Spinbox(sizes_frame, from_=8, to=72, textvariable=self.font_size_heading3_var, width=5)
         self.font_size_heading3_spinbox.grid(row=3, column=1, sticky=tk.W+tk.E)
 
-        # Margins
         ttk.Label(main_frame, text="Margins (cm):").grid(row=3, column=0, sticky=tk.W, pady=5)
         margins_frame = ttk.Frame(main_frame)
         margins_frame.grid(row=3, column=1, sticky=tk.W+tk.E, pady=5, padx=5)
-        margins_frame.columnconfigure(1, weight=1)
 
         ttk.Label(margins_frame, text="Top:").grid(row=0, column=0, sticky=tk.W)
-        self.margin_top_var = tk.DoubleVar(value=self.parent.margins.get('top', 2.0))
-        self.margin_top_spinbox = ttk.Spinbox(margins_frame, from_=0.5, to=5.0, increment=0.1, textvariable=self.margin_top_var)
-        self.margin_top_spinbox.grid(row=0, column=1, sticky=tk.W+tk.E, pady=2)
+        self.margin_top_var = tk.DoubleVar(value=self.parent.margin_top)
+        self.margin_top_spinbox = ttk.Spinbox(margins_frame, from_=0, to=10, increment=0.1, textvariable=self.margin_top_var, width=5)
+        self.margin_top_spinbox.grid(row=0, column=1, sticky=tk.W+tk.E)
 
         ttk.Label(margins_frame, text="Bottom:").grid(row=1, column=0, sticky=tk.W)
-        self.margin_bottom_var = tk.DoubleVar(value=self.parent.margins.get('bottom', 2.0))
-        self.margin_bottom_spinbox = ttk.Spinbox(margins_frame, from_=0.5, to=5.0, increment=0.1, textvariable=self.margin_bottom_var)
-        self.margin_bottom_spinbox.grid(row=1, column=1, sticky=tk.W+tk.E, pady=2)
+        self.margin_bottom_var = tk.DoubleVar(value=self.parent.margin_bottom)
+        self.margin_bottom_spinbox = ttk.Spinbox(margins_frame, from_=0, to=10, increment=0.1, textvariable=self.margin_bottom_var, width=5)
+        self.margin_bottom_spinbox.grid(row=1, column=1, sticky=tk.W+tk.E)
 
         ttk.Label(margins_frame, text="Left:").grid(row=2, column=0, sticky=tk.W)
-        self.margin_left_var = tk.DoubleVar(value=self.parent.margins.get('left', 2.0))
-        self.margin_left_spinbox = ttk.Spinbox(margins_frame, from_=0.5, to=5.0, increment=0.1, textvariable=self.margin_left_var)
-        self.margin_left_spinbox.grid(row=2, column=1, sticky=tk.W+tk.E, pady=2)
+        self.margin_left_var = tk.DoubleVar(value=self.parent.margin_left)
+        self.margin_left_spinbox = ttk.Spinbox(margins_frame, from_=0, to=10, increment=0.1, textvariable=self.margin_left_var, width=5)
+        self.margin_left_spinbox.grid(row=2, column=1, sticky=tk.W+tk.E)
 
         ttk.Label(margins_frame, text="Right:").grid(row=3, column=0, sticky=tk.W)
-        self.margin_right_var = tk.DoubleVar(value=self.parent.margins.get('right', 2.0))
-        self.margin_right_spinbox = ttk.Spinbox(margins_frame, from_=0.5, to=5.0, increment=0.1, textvariable=self.margin_right_var)
-        self.margin_right_spinbox.grid(row=3, column=1, sticky=tk.W+tk.E, pady=2)
+        self.margin_right_var = tk.DoubleVar(value=self.parent.margin_right)
+        self.margin_right_spinbox = ttk.Spinbox(margins_frame, from_=0, to=10, increment=0.1, textvariable=self.margin_right_var, width=5)
+        self.margin_right_spinbox.grid(row=3, column=1, sticky=tk.W+tk.E)
 
-        # Buttons
-        buttons_frame = ttk.Frame(main_frame)
-        buttons_frame.grid(row=4, column=0, columnspan=2, pady=20)
+        save_btn = ttk.Button(main_frame, text="Save", command=self.save_formatting)
+        save_btn.grid(row=4, column=0, pady=10)
 
-        save_btn = ttk.Button(buttons_frame, text="Save", command=self.save_settings)
-        save_btn.pack(side=tk.LEFT, padx=5)
+        default_btn = ttk.Button(main_frame, text="Back to Default", command=self.set_default_formatting)
+        default_btn.grid(row=4, column=1, pady=10)
 
-        default_btn = ttk.Button(buttons_frame, text="Restore Defaults", command=self.restore_defaults)
-        default_btn.pack(side=tk.LEFT, padx=5)
-
-        close_btn = ttk.Button(buttons_frame, text="Close", command=self.destroy)
-        close_btn.pack(side=tk.RIGHT, padx=5)
-
-    def save_settings(self):
+    def save_formatting(self):
         self.parent.font_name = self.font_name_var.get()
         self.parent.line_spacing = self.line_spacing_var.get()
         self.parent.font_size_normal = self.font_size_normal_var.get()
         self.parent.font_size_heading1 = self.font_size_heading1_var.get()
         self.parent.font_size_heading2 = self.font_size_heading2_var.get()
         self.parent.font_size_heading3 = self.font_size_heading3_var.get()
-        self.parent.margins = {
-            'top': self.margin_top_var.get(),
-            'bottom': self.margin_bottom_var.get(),
-            'left': self.margin_left_var.get(),
-            'right': self.margin_right_var.get()
-        }
+        self.parent.margin_top = self.margin_top_var.get()
+        self.parent.margin_bottom = self.margin_bottom_var.get()
+        self.parent.margin_left = self.margin_left_var.get()
+        self.parent.margin_right = self.margin_right_var.get()
         self.parent.save_settings()
-        messagebox.showinfo("Formatting", "Formatting settings saved successfully.")
+        self.destroy()
 
-    def restore_defaults(self):
+    def set_default_formatting(self):
         self.font_name_var.set("Times New Roman")
         self.line_spacing_var.set("1.5 lines")
         self.font_size_normal_var.set(12)
@@ -335,17 +285,16 @@ class FormattingWindow(tk.Toplevel):
         self.margin_bottom_var.set(2.0)
         self.margin_left_var.set(2.0)
         self.margin_right_var.set(2.0)
-        messagebox.showinfo("Formatting", "Formatting settings restored to defaults.")
 
 class ClaudeApp(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("University Paper Generator")
-        self.geometry("800x800")
-
+        self.geometry("800x600")
+        
         # Initialize variables
         self.api_key = ""
-        self.system_prompt = (
+        self.default_system_prompt = (
             "You are to write a university paper based on the provided scientific papers and study scripts. "
             "Determine an appropriate title for the paper. The paper should be formatted as a real university paper suitable for submission, "
             "including chapters, sections, headings, and citations in Harvard style. "
@@ -356,7 +305,7 @@ class ClaudeApp(tk.Tk):
             "Remember to sometimes make minor spelling mistakes as a student around B2/C1 English level might. "
             "Your specific instructions are:\n\n"
             "{instructions}\n\n"
-            "!!!this is the next document!!!\n\n"
+            "The scripts are provided in the following format:\n\n"
             "{scripts}\n\n"
             "Please output the paper in Markdown format with clear markers for headings and sections. "
             "Use '#' for main headings, '##' for subheadings, and '###' for sub-subheadings. "
@@ -376,16 +325,16 @@ class ClaudeApp(tk.Tk):
             "...\n\n"
             "# Bibliography\n"
             "...\n\n"
-            "IMPORTANT: IF THE INSTRUCTIONS OR DETAILS SUCH AS TITLE PAGE, "
-            "BIBLIOGRAPHY, CITATION STYLE, ETC., ARE PROVIDED REGARDING STRUCTURING THE PAPER, "
+            "IMPORTANT: IF THE INSTRUCTIONS OR DETAILS SUCH AS TITLE PAGE,"
+            "BIBLIOGRAPHY, CITATION STYLE, ETC., ARE PROVIDED REGARDING STRUCTURING THE PAPER,"
             "PLEASE FOLLOW THOSE INSTEAD OF THE ONES LISTED ABOVE. MAKE USE OF FULL MAX TOKEN OUTPUT OF 8192"
         )
+        self.system_prompt = self.default_system_prompt
         self.scripts = []
         self.instructions = []
         self.first_name = ""
         self.last_name = ""
         self.date = datetime.now().strftime("%Y-%m-%d")
-        self.margins = {'top': 2.0, 'bottom': 2.0, 'left': 2.0, 'right': 2.0}
 
         # Formatting options
         self.font_name = "Times New Roman"
@@ -393,139 +342,73 @@ class ClaudeApp(tk.Tk):
         self.font_size_heading1 = 16
         self.font_size_heading2 = 14
         self.font_size_heading3 = 12
-        self.line_spacing = 1.5  # Default line spacing
+        self.line_spacing = "1.5 lines"
+        self.margin_top = 2.0
+        self.margin_bottom = 2.0
+        self.margin_left = 2.0
+        self.margin_right = 2.0
 
         # Load saved settings
         self.load_settings()
 
         # Build UI
         self.create_widgets()
-
+    
     def create_widgets(self):
         style = ttk.Style()
         style.theme_use('clam')
 
-        # Top Frame for Settings and Formatting Buttons
-        top_frame = ttk.Frame(self, padding="10")
-        top_frame.pack(fill=tk.X)
-
-        settings_icon = PhotoImage(width=20, height=20)  # Placeholder for gear icon
-        try:
-            settings_icon = PhotoImage(file="gear.png")  # Ensure you have a gear.png in the directory
-        except:
-            pass  # Use placeholder if gear.png not found
-
-        settings_btn = ttk.Button(top_frame, text="Settings", image=settings_icon, compound=tk.LEFT, command=self.open_settings_window)
-        settings_btn.image = settings_icon  # Keep a reference
-        settings_btn.pack(side=tk.RIGHT, padx=5)
-
-        formatting_btn = ttk.Button(top_frame, text="Formatting", command=self.open_formatting_window)
-        formatting_btn.pack(side=tk.RIGHT, padx=5)
-
-        # Main Frame
         main_frame = ttk.Frame(self, padding="10")
         main_frame.pack(fill=tk.BOTH, expand=True)
 
-        # API Key (Moved to Settings)
-        # First Name (Moved to Settings)
-        # Last Name (Moved to Settings)
-        # Date (Moved to Settings)
+        # Top buttons frame
+        top_buttons_frame = ttk.Frame(main_frame)
+        top_buttons_frame.grid(row=0, column=0, columnspan=3, sticky=tk.W+tk.E, pady=5)
 
-        # Instructions Button
-        instructions_btn = ttk.Button(main_frame, text="Manage Instructions", command=self.open_instructions_window)
-        instructions_btn.grid(row=0, column=0, columnspan=3, pady=10, sticky=tk.W+tk.E)
+        # Settings button (gear symbol)
+        settings_btn = ttk.Button(top_buttons_frame, text="⚙", command=self.open_settings_window)
+        settings_btn.pack(side=tk.LEFT, padx=5)
 
-        # Scripts Button
-        scripts_btn = ttk.Button(main_frame, text="Manage Scripts", command=self.open_scripts_window)
-        scripts_btn.grid(row=1, column=0, columnspan=3, pady=10, sticky=tk.W+tk.E)
+        # Formatting options button
+        formatting_btn = ttk.Button(top_buttons_frame, text="Formatting Options", command=self.open_formatting_window)
+        formatting_btn.pack(side=tk.LEFT, padx=5)
 
-        # System Prompt (Read-Only)
-        ttk.Label(main_frame, text="System Prompt:").grid(row=2, column=0, sticky=tk.W, pady=5)
-        self.system_prompt_text = tk.Text(main_frame, wrap=tk.WORD, height=10, state='disabled')
-        self.system_prompt_text.grid(row=3, column=0, columnspan=3, pady=5, padx=5, sticky=tk.W+tk.E+tk.N+tk.S)
-        self.update_system_prompt_text()
+        # System Prompt
+        ttk.Label(main_frame, text="System Prompt:").grid(row=1, column=0, sticky=tk.W, pady=5)
+        self.system_prompt_text = tk.Text(main_frame, wrap=tk.WORD, height=10)
+        self.system_prompt_text.grid(row=1, column=1, columnspan=2, pady=5, padx=5, sticky=tk.W+tk.E+tk.N+tk.S)
+        self.system_prompt_text.insert(tk.END, self.system_prompt)
 
         # Buttons
         buttons_frame = ttk.Frame(main_frame)
-        buttons_frame.grid(row=4, column=0, columnspan=3, pady=10)
+        buttons_frame.grid(row=2, column=0, columnspan=3, pady=10)
 
-        generate_btn = ttk.Button(buttons_frame, text="Generate Paper", command=self.send_request)
-        generate_btn.pack(side=tk.LEFT, padx=5)
-
-        save_output_btn = ttk.Button(buttons_frame, text="Save Output", command=self.save_output)
-        save_output_btn.pack(side=tk.LEFT, padx=5)
+        ttk.Button(buttons_frame, text="Manage Scripts", command=self.open_scripts_window).pack(side=tk.LEFT, padx=5)
+        ttk.Button(buttons_frame, text="Manage Instructions", command=self.open_instructions_window).pack(side=tk.LEFT, padx=5)
+        ttk.Button(buttons_frame, text="Generate Paper", command=self.send_request).pack(side=tk.LEFT, padx=5)
+        ttk.Button(buttons_frame, text="Save Output", command=self.save_output).pack(side=tk.LEFT, padx=5)
+        ttk.Button(buttons_frame, text="Save All Settings", command=self.save_all_settings).pack(side=tk.LEFT, padx=5)
+        ttk.Button(buttons_frame, text="Reset System Prompt", command=self.reset_system_prompt).pack(side=tk.LEFT, padx=5)
 
         # Output Text Area
-        self.output_text = tk.Text(main_frame, wrap=tk.WORD, height=15)
-        self.output_text.grid(row=5, column=0, columnspan=3, pady=10, padx=5, sticky=tk.W+tk.E+tk.N+tk.S)
+        self.output_text = tk.Text(main_frame, wrap=tk.WORD, height=20)
+        self.output_text.grid(row=3, column=0, columnspan=3, pady=10, sticky=tk.W+tk.E+tk.N+tk.S)
 
-        # Configure grid weights
-        main_frame.columnconfigure(0, weight=1)
-        main_frame.rowconfigure(3, weight=1)
-        main_frame.rowconfigure(5, weight=2)
-
-    def load_settings(self):
-        try:
-            with open('claude_app_settings.json', 'r') as f:
-                settings = json.load(f)
-            self.api_key = settings.get('api_key', '')
-            self.first_name = settings.get('first_name', '')
-            self.last_name = settings.get('last_name', '')
-            self.system_prompt = settings.get('system_prompt', self.system_prompt)
-            self.font_name = settings.get('font_name', 'Times New Roman')
-            self.font_size_normal = settings.get('font_size_normal', 12)
-            self.font_size_heading1 = settings.get('font_size_heading1', 16)
-            self.font_size_heading2 = settings.get('font_size_heading2', 14)
-            self.font_size_heading3 = settings.get('font_size_heading3', 12)
-            self.line_spacing = settings.get('line_spacing', '1.5 lines')
-            self.margins = settings.get('margins', {'top': 2.0, 'bottom': 2.0, 'left': 2.0, 'right': 2.0})
-        except FileNotFoundError:
-            pass  # It's okay if the file doesn't exist yet
-
-    def save_settings(self):
-        settings = {
-            'api_key': self.api_key,
-            'first_name': self.first_name,
-            'last_name': self.last_name,
-            'system_prompt': self.system_prompt,
-            'font_name': self.font_name,
-            'font_size_normal': self.font_size_normal,
-            'font_size_heading1': self.font_size_heading1,
-            'font_size_heading2': self.font_size_heading2,
-            'font_size_heading3': self.font_size_heading3,
-            'line_spacing': self.line_spacing,
-            'margins': self.margins
-        }
-        with open('claude_app_settings.json', 'w') as f:
-            json.dump(settings, f)
-        self.update_system_prompt_text()
-
-    def update_system_prompt_text(self):
-        self.system_prompt_text.config(state='normal')
-        formatted_instructions = "\n\n".join([f"Instruction {i+1} ({name}):\n{content}" for i, (name, content) in enumerate(self.instructions)])
-        formatted_scripts = "\n\n".join([f"Script {i+1} ({name}):\n{content}" for i, (name, content) in enumerate(self.scripts)])
-        system_message = self.system_prompt.format(
-            scripts=formatted_scripts,
-            instructions=formatted_instructions,
-            first_name=self.first_name,
-            last_name=self.last_name,
-            date=self.date
-        )
-        self.system_prompt_text.delete(1.0, tk.END)
-        self.system_prompt_text.insert(tk.END, system_message)
-        self.system_prompt_text.config(state='disabled')
-
-    def open_scripts_window(self):
-        ScriptsWindow(self)
-
-    def open_instructions_window(self):
-        InstructionsWindow(self)
+        main_frame.columnconfigure(1, weight=1)
+        main_frame.rowconfigure(1, weight=1)
+        main_frame.rowconfigure(3, weight=2)
 
     def open_settings_window(self):
         SettingsWindow(self)
 
     def open_formatting_window(self):
         FormattingWindow(self)
+
+    def open_scripts_window(self):
+        ScriptsWindow(self)
+
+    def open_instructions_window(self):
+        InstructionsWindow(self)
 
     def upload_script(self, file_path):
         file_name = os.path.basename(file_path)
@@ -556,7 +439,6 @@ class ClaudeApp(tk.Tk):
                     self.scripts.append((file_name, text))
                 except Exception as e:
                     messagebox.showerror("Error", f"Error reading text file {file_name}: {e}")
-        self.update_system_prompt_text()
 
     def upload_instruction(self, file_path):
         file_name = os.path.basename(file_path)
@@ -587,7 +469,17 @@ class ClaudeApp(tk.Tk):
                     self.instructions.append((file_name, text))
                 except Exception as e:
                     messagebox.showerror("Error", f"Error reading text file {file_name}: {e}")
-        self.update_system_prompt_text()
+
+    def update_system_prompt(self):
+        formatted_instructions = "\n\n".join([f"Instruction {i+1} ({name}):\n{content}\n!!!this is the next document!!!" for i, (name, content) in enumerate(self.instructions)])
+        formatted_scripts = "\n\n".join([f"Script {i+1} ({name}):\n{content}\n!!!this is the next document!!!" for i, (name, content) in enumerate(self.scripts)])
+        self.system_prompt = self.system_prompt_text.get(1.0, tk.END).format(
+            scripts=formatted_scripts,
+            instructions=formatted_instructions,
+            first_name=self.first_name,
+            last_name=self.last_name,
+            date=self.date
+        )
 
     def send_request(self):
         if not self.instructions:
@@ -597,32 +489,19 @@ class ClaudeApp(tk.Tk):
             messagebox.showerror("Error", "Please upload script files first.")
             return
         if not self.first_name or not self.last_name:
-            messagebox.showerror("Error", "Please enter your first and last name in Settings.")
+            messagebox.showerror("Error", "Please enter your first and last name in the settings.")
             return
         if not self.api_key:
-            messagebox.showerror("Error", "Please enter your API key in Settings.")
+            messagebox.showerror("Error", "Please enter your API key in the settings.")
             return
-
-        self.first_name = self.first_name
-        self.last_name = self.last_name
-        self.date = self.date
-        self.save_settings()
-
-        formatted_instructions = "\n\n".join([f"Instruction {i+1} ({name}):\n{content}" for i, (name, content) in enumerate(self.instructions)])
-        formatted_scripts = "\n\n".join([f"Script {i+1} ({name}):\n{content}" for i, (name, content) in enumerate(self.scripts)])
-
-        system_message = self.system_prompt.format(
-            scripts=formatted_scripts,
-            instructions=formatted_instructions,
-            first_name=self.first_name,
-            last_name=self.last_name,
-            date=self.date
-        )
-
+        
+        self.update_system_prompt()
+        
+        # Prepare the messages
         messages = [
-            {"role": "user", "content": system_message}
+            {"role": "user", "content": self.system_prompt}
         ]
-
+        
         # API call parameters
         api_url = "https://api.anthropic.com/v1/messages"
         headers = {
@@ -642,7 +521,7 @@ class ClaudeApp(tk.Tk):
             self.output_text.delete(1.0, tk.END)
             self.output_text.insert(tk.END, "Generating response, please wait...")
             self.update_idletasks()
-
+            
             response = requests.post(api_url, headers=headers, json=data)
             if response.status_code == 200:
                 result = response.json()
@@ -654,7 +533,6 @@ class ClaudeApp(tk.Tk):
             else:
                 error_message = response.text
                 self.output_text.delete(1.0, tk.END)
-                self.output_text.insert(tk.END, "")
                 messagebox.showerror("Error", f"API Error {response.status_code}: {error_message}")
         except Exception as e:
             self.output_text.delete(1.0, tk.END)
@@ -665,113 +543,64 @@ class ClaudeApp(tk.Tk):
         if not output:
             messagebox.showerror("Error", "No output to save.")
             return
-
-        save_path = filedialog.asksaveasfilename(
-            title="Save Output as Word File",
-            defaultextension=".docx",
-            filetypes=[("Word Document", "*.docx")]
-        )
+        save_path = filedialog.asksaveasfilename(title="Save Output as Word File", defaultextension=".docx",
+                                                 filetypes=[("Word Document", "*.docx")])
         if save_path:
             try:
-                # Get formatting options
-                font_name = self.font_name
-                font_size_normal = self.font_size_normal
-                font_size_heading1 = self.font_size_heading1
-                font_size_heading2 = self.font_size_heading2
-                font_size_heading3 = self.font_size_heading3
-                line_spacing_option = self.line_spacing
-                if line_spacing_option == "Single":
-                    line_spacing = 1
-                elif line_spacing_option == "1.5 lines":
-                    line_spacing = 1.5
-                elif line_spacing_option == "Double":
-                    line_spacing = 2
-                else:
-                    line_spacing = 1  # Default to single spacing
-
-                # Document creation
                 document = Document()
-
+                
                 # Document settings
                 section = document.sections[0]
                 section.page_height = Inches(11)
                 section.page_width = Inches(8.5)
-                section.left_margin = Inches(self.margins['left'] / 2.54)
-                section.right_margin = Inches(self.margins['right'] / 2.54)
-                section.top_margin = Inches(self.margins['top'] / 2.54)
-                section.bottom_margin = Inches(self.margins['bottom'] / 2.54)
-
+                section.left_margin = Cm(self.margin_left)
+                section.right_margin = Cm(self.margin_right)
+                section.top_margin = Cm(self.margin_top)
+                section.bottom_margin = Cm(self.margin_bottom)
+                
                 # Define styles
                 styles = document.styles
-
+                
                 # Title style
-                if 'TitleStyle' not in styles:
-                    style_title = styles.add_style('TitleStyle', WD_STYLE_TYPE.PARAGRAPH)
-                else:
-                    style_title = styles['TitleStyle']
-                style_title.font.size = Pt(font_size_heading1)
+                style_title = styles.add_style('TitleStyle', WD_STYLE_TYPE.PARAGRAPH)
+                style_title.font.size = Pt(self.font_size_heading1)
                 style_title.font.bold = True
-                style_title.font.name = font_name
-
+                style_title.font.name = self.font_name
+                
                 # Heading 1 style
-                if 'Heading1Custom' not in styles:
-                    style_heading1 = styles.add_style('Heading1Custom', WD_STYLE_TYPE.PARAGRAPH)
-                else:
-                    style_heading1 = styles['Heading1Custom']
+                style_heading1 = styles.add_style('Heading1Custom', WD_STYLE_TYPE.PARAGRAPH)
                 style_heading1.base_style = styles['Heading 1']
-                style_heading1.font.size = Pt(font_size_heading1)
+                style_heading1.font.size = Pt(self.font_size_heading1)
                 style_heading1.font.bold = True
-                style_heading1.font.name = font_name
-
+                style_heading1.font.name = self.font_name
+                
                 # Heading 2 style
-                if 'Heading2Custom' not in styles:
-                    style_heading2 = styles.add_style('Heading2Custom', WD_STYLE_TYPE.PARAGRAPH)
-                else:
-                    style_heading2 = styles['Heading2Custom']
+                style_heading2 = styles.add_style('Heading2Custom', WD_STYLE_TYPE.PARAGRAPH)
                 style_heading2.base_style = styles['Heading 2']
-                style_heading2.font.size = Pt(font_size_heading2)
+                style_heading2.font.size = Pt(self.font_size_heading2)
                 style_heading2.font.bold = True
-                style_heading2.font.name = font_name
-
+                style_heading2.font.name = self.font_name
+                
                 # Heading 3 style
-                if 'Heading3Custom' not in styles:
-                    style_heading3 = styles.add_style('Heading3Custom', WD_STYLE_TYPE.PARAGRAPH)
-                else:
-                    style_heading3 = styles['Heading3Custom']
+                style_heading3 = styles.add_style('Heading3Custom', WD_STYLE_TYPE.PARAGRAPH)
                 style_heading3.base_style = styles['Heading 3']
-                style_heading3.font.size = Pt(font_size_heading3)
+                style_heading3.font.size = Pt(self.font_size_heading3)
                 style_heading3.font.bold = True
-                style_heading3.font.name = font_name
-
+                style_heading3.font.name = self.font_name
+                
                 # Normal text style
                 style_normal = styles['Normal']
-                style_normal.font.size = Pt(font_size_normal)
-                style_normal.font.name = font_name
-
+                style_normal.font.size = Pt(self.font_size_normal)
+                style_normal.font.name = self.font_name
+                
                 # Set line spacing for paragraph styles
+                line_spacing = 1.0 if self.line_spacing == "Single" else 1.5 if self.line_spacing == "1.5 lines" else 2.0
                 for style in [style_normal, style_title, style_heading1, style_heading2, style_heading3]:
                     style.paragraph_format.line_spacing = line_spacing
 
-                # Extract title page content
-                title_page_match = re.search(r'####TITLE PAGE####(.*?)####END TITLE PAGE####', output, re.DOTALL | re.IGNORECASE)
-                if title_page_match:
-                    title_page_content = title_page_match.group(1).strip()
-                    output = output.replace(title_page_match.group(0), '')  # Remove title page from output
-
-                    # Create title page
-                    p = document.add_paragraph('', style='TitleStyle')
-                    for line in title_page_content.split('\n'):
-                        if line.strip():
-                            p.add_run(line.strip()).add_break()
-                    p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-
-                    # Start a new section on the next page
-                    new_section = document.add_section(WD_SECTION_START.NEW_PAGE)
-                else:
-                    messagebox.showwarning("Warning", "Title page markers not found. Title page will not be created.")
-
-                # Process the rest of the content
+                # Process the content
                 paragraphs = output.strip().split('\n')
+
                 for para in paragraphs:
                     para = para.strip()
                     if not para:
@@ -787,43 +616,98 @@ class ClaudeApp(tk.Tk):
                         document.add_paragraph(para[4:].strip(), style='Heading3Custom')
                     elif re.match(r'^\d+\.', para):
                         # Numbered list
-                        document.add_paragraph(para, style='List Number')
+                        items = para.split('\n')
+                        for item in items:
+                            p = document.add_paragraph(style='List Number')
+                            p.add_run(item.strip())
                     elif para.startswith('- '):
                         # Bullet list
-                        document.add_paragraph(para[2:].strip(), style='List Bullet')
+                        items = para.split('\n')
+                        for item in items:
+                            p = document.add_paragraph(style='List Bullet')
+                            p.add_run(item[2:].strip())
                     else:
-                        # Regular paragraph with bold and italic
+                        # Regular paragraph
                         p = document.add_paragraph(style='Normal')
                         self._add_runs(p, para)
 
                 # Add page numbers
-                for section in document.sections:
-                    footer = section.footer
-                    paragraph = footer.paragraphs[0]
-                    paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                    run = paragraph.add_run()
-                    fldSimple = OxmlElement('w:fldSimple')
-                    fldSimple.set(qn('w:instr'), 'PAGE')
-                    run._r.append(fldSimple)
+                self._add_page_numbers(document.sections[0])
 
-                # Save the document
                 document.save(save_path)
                 messagebox.showinfo("Success", f"Output saved to {save_path}")
             except Exception as e:
                 messagebox.showerror("Error", f"Error saving Word file: {e}")
 
+    def _add_page_numbers(self, section):
+        footer = section.footer
+        paragraph = footer.paragraphs[0]
+        paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        run = paragraph.add_run()
+        fldSimple = OxmlElement('w:fldSimple')
+        fldSimple.set(qn('w:instr'), 'PAGE')
+        run._r.append(fldSimple)
+
     def _add_runs(self, paragraph, text):
-        # Handles **bold** and *italic* text
-        tokens = re.split(r'(\*\*.*?\*\*|\*.*?\*)', text)
-        for token in tokens:
-            if token.startswith('**') and token.endswith('**'):
-                run = paragraph.add_run(token[2:-2])
+        # This method adds runs to the paragraph, handling bold and italic text
+        parts = re.split(r'(\*\*.*?\*\*|\*.*?\*)', text)
+        for part in parts:
+            if part.startswith('**') and part.endswith('**'):
+                run = paragraph.add_run(part[2:-2])
                 run.bold = True
-            elif token.startswith('*') and token.endswith('*'):
-                run = paragraph.add_run(token[1:-1])
+            elif part.startswith('*') and part.endswith('*'):
+                run = paragraph.add_run(part[1:-1])
                 run.italic = True
             else:
-                paragraph.add_run(token)
+                paragraph.add_run(part)
+
+    def load_settings(self):
+        try:
+            with open('claude_app_settings.json', 'r') as f:
+                settings = json.load(f)
+                self.api_key = settings.get('api_key', '')
+                self.first_name = settings.get('first_name', '')
+                self.last_name = settings.get('last_name', '')
+                self.font_name = settings.get('font_name', 'Times New Roman')
+                self.font_size_normal = settings.get('font_size_normal', 12)
+                self.font_size_heading1 = settings.get('font_size_heading1', 16)
+                self.font_size_heading2 = settings.get('font_size_heading2', 14)
+                self.font_size_heading3 = settings.get('font_size_heading3', 12)
+                self.line_spacing = settings.get('line_spacing', '1.5 lines')
+                self.margin_top = settings.get('margin_top', 2.0)
+                self.margin_bottom = settings.get('margin_bottom', 2.0)
+                self.margin_left = settings.get('margin_left', 2.0)
+                self.margin_right = settings.get('margin_right', 2.0)
+                self.system_prompt = settings.get('system_prompt', self.default_system_prompt)
+        except FileNotFoundError:
+            pass  # It's okay if the file doesn't exist yet
+
+    def save_all_settings(self):
+        self.system_prompt = self.system_prompt_text.get(1.0, tk.END).strip()
+        settings = {
+            'api_key': self.api_key,
+            'first_name': self.first_name,
+            'last_name': self.last_name,
+            'font_name': self.font_name,
+            'font_size_normal': self.font_size_normal,
+            'font_size_heading1': self.font_size_heading1,
+            'font_size_heading2': self.font_size_heading2,
+            'font_size_heading3': self.font_size_heading3,
+            'line_spacing': self.line_spacing,
+            'margin_top': self.margin_top,
+            'margin_bottom': self.margin_bottom,
+            'margin_left': self.margin_left,
+            'margin_right': self.margin_right,
+            'system_prompt': self.system_prompt
+        }
+        with open('claude_app_settings.json', 'w') as f:
+            json.dump(settings, f)
+        messagebox.showinfo("Settings", "All settings saved successfully.")
+
+    def reset_system_prompt(self):
+        self.system_prompt_text.delete(1.0, tk.END)
+        self.system_prompt_text.insert(tk.END, self.default_system_prompt)
+        messagebox.showinfo("System Prompt", "System prompt reset to default.")
 
 if __name__ == "__main__":
     app = ClaudeApp()
