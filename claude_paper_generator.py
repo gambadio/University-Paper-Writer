@@ -1,5 +1,5 @@
 import tkinter as tk
-from tkinter import filedialog, messagebox
+from tkinter import filedialog, messagebox, simpledialog
 from tkinter import ttk
 import requests
 import os
@@ -322,11 +322,62 @@ class SettingsWindow(tk.Toplevel):
         self.grab_release()
         super().destroy()
 
+class CustomPromptsWindow(tk.Toplevel):
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.parent = parent
+        self.title("Manage Custom Prompts")
+        self.geometry("600x400")
+        self.grab_set()
+        self.create_widgets()
+
+    def create_widgets(self):
+        self.prompts_listbox = tk.Listbox(self, width=80, height=15)
+        self.prompts_listbox.pack(pady=10, padx=10, fill=tk.BOTH, expand=True)
+
+        buttons_frame = ttk.Frame(self)
+        buttons_frame.pack(pady=10, fill=tk.X)
+
+        load_btn = ttk.Button(buttons_frame, text="Load Selected", command=self.load_prompt)
+        load_btn.pack(side=tk.LEFT, padx=5)
+
+        delete_btn = ttk.Button(buttons_frame, text="Delete Selected", command=self.delete_prompt)
+        delete_btn.pack(side=tk.LEFT, padx=5)
+
+        close_btn = ttk.Button(buttons_frame, text="Close", command=self.destroy)
+        close_btn.pack(side=tk.RIGHT, padx=5)
+
+        self.update_listbox()
+
+    def load_prompt(self):
+        selection = self.prompts_listbox.curselection()
+        if selection:
+            prompt_name = self.prompts_listbox.get(selection[0])
+            prompt = self.parent.custom_prompts.get(prompt_name)
+            if prompt:
+                self.parent.system_prompt_text.delete(1.0, tk.END)
+                self.parent.system_prompt_text.insert(tk.END, prompt)
+                self.destroy()
+
+    def delete_prompt(self):
+        selection = self.prompts_listbox.curselection()
+        if selection:
+            prompt_name = self.prompts_listbox.get(selection[0])
+            if messagebox.askyesno("Delete Prompt", f"Are you sure you want to delete the prompt '{prompt_name}'?"):
+                del self.parent.custom_prompts[prompt_name]
+                self.parent.save_all_settings()
+                self.update_listbox()
+
+    def update_listbox(self):
+        self.prompts_listbox.delete(0, tk.END)
+        for prompt_name in self.parent.custom_prompts.keys():
+            self.prompts_listbox.insert(tk.END, prompt_name)
+
 class ClaudeApp(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("University Paper Generator")
-        self.geometry("800x600")
+        self.geometry("900x500")
 
         # Initialize variables
         self.api_key = ""
@@ -369,6 +420,7 @@ class ClaudeApp(tk.Tk):
         self.first_name = ""
         self.last_name = ""
         self.date = datetime.now().strftime("%Y-%m-%d")
+        self.custom_prompts = {}
 
         # Formatting options
         self.font_name = "Times New Roman"
@@ -417,10 +469,16 @@ class ClaudeApp(tk.Tk):
         formatting_btn.pack(side=tk.LEFT, padx=5)
 
         # System Prompt
-        ttk.Label(main_frame, text="System Prompt:").grid(row=1, column=0, sticky=tk.W, pady=5)
-        self.system_prompt_text = tk.Text(main_frame, wrap=tk.WORD, height=10)
-        self.system_prompt_text.grid(row=1, column=1, columnspan=2, pady=5, padx=5, sticky=tk.W+tk.E+tk.N+tk.S)
+        prompt_frame = ttk.Frame(main_frame)
+        prompt_frame.grid(row=1, column=0, columnspan=3, sticky=tk.W+tk.E+tk.N+tk.S, pady=5)
+
+        ttk.Label(prompt_frame, text="System Prompt:").pack(side=tk.LEFT, padx=5)
+        self.system_prompt_text = tk.Text(prompt_frame, wrap=tk.WORD, height=10)
+        self.system_prompt_text.pack(side=tk.LEFT, expand=True, fill=tk.BOTH, padx=5)
         self.system_prompt_text.insert(tk.END, self.system_prompt)
+
+        save_prompt_btn = ttk.Button(prompt_frame, text="Save Prompt", command=self.save_custom_prompt)
+        save_prompt_btn.pack(side=tk.RIGHT, padx=5)
 
         # Buttons
         buttons_frame = ttk.Frame(main_frame)
@@ -431,6 +489,9 @@ class ClaudeApp(tk.Tk):
 
         manage_instructions_btn = ttk.Button(buttons_frame, text="Manage Instructions", command=self.open_instructions_window)
         manage_instructions_btn.pack(side=tk.LEFT, padx=5)
+
+        manage_prompts_btn = ttk.Button(buttons_frame, text="Manage Prompts", command=self.open_custom_prompts_window)
+        manage_prompts_btn.pack(side=tk.LEFT, padx=5)
 
         generate_paper_btn = ttk.Button(buttons_frame, text="Generate Paper", command=self.send_request, style="Green.TButton")
         generate_paper_btn.pack(side=tk.LEFT, padx=5)
@@ -465,6 +526,17 @@ class ClaudeApp(tk.Tk):
     def open_instructions_window(self):
         InstructionsWindow(self)
 
+    def open_custom_prompts_window(self):
+        CustomPromptsWindow(self)
+
+    def save_custom_prompt(self):
+        prompt_name = simpledialog.askstring("Save Prompt", "Enter a name for this prompt:")
+        if prompt_name:
+            current_prompt = self.system_prompt_text.get(1.0, tk.END).strip()
+            self.custom_prompts[prompt_name] = current_prompt
+            self.save_all_settings()
+            messagebox.showinfo("Success", f"Prompt '{prompt_name}' saved successfully.")
+
     def upload_script(self, file_path):
         file_name = os.path.basename(file_path)
         file_extension = os.path.splitext(file_path)[1].lower()
@@ -476,9 +548,7 @@ class ClaudeApp(tk.Tk):
                     reader = PyPDF2.PdfReader(f)
                     text = ""
                     for page in reader.pages:
-                        page_text = page.extract_text()
-                        if page_text:
-                            text += page_text
+                        text += page.extract_text()
                 self.scripts.append((file_name, text))
             except Exception as e:
                 messagebox.showerror("Error", f"Error reading PDF file {file_name}: {e}")
@@ -507,9 +577,7 @@ class ClaudeApp(tk.Tk):
                     reader = PyPDF2.PdfReader(f)
                     text = ""
                     for page in reader.pages:
-                        page_text = page.extract_text()
-                        if page_text:
-                            text += page_text
+                        text += page.extract_text()
                 self.instructions.append((file_name, text))
             except Exception as e:
                 messagebox.showerror("Error", f"Error reading PDF file {file_name}: {e}")
@@ -530,7 +598,7 @@ class ClaudeApp(tk.Tk):
     def update_system_prompt(self):
         formatted_instructions = "\n\n".join([f"Instruction {i+1} ({name}):\n{content}\n!!!this is the next document!!!" for i, (name, content) in enumerate(self.instructions)])
         formatted_scripts = "\n\n".join([f"Script {i+1} ({name}):\n{content}\n!!!this is the next document!!!" for i, (name, content) in enumerate(self.scripts)])
-        self.system_prompt = self.system_prompt_text.get(1.0, tk.END).format(
+        self.system_prompt = self.system_prompt_text.get(1.0, tk.END).strip().format(
             scripts=formatted_scripts,
             instructions=formatted_instructions,
             first_name=self.first_name,
@@ -687,14 +755,10 @@ class ClaudeApp(tk.Tk):
                         document.add_paragraph(para[3:].strip(), style='Heading2Custom')
                     elif para.startswith('### '):
                         document.add_paragraph(para[4:].strip(), style='Heading3Custom')
-                    elif re.match(r'^\d+\.', para):
-                        # Numbered list
-                        p = document.add_paragraph(style='List Number')
-                        self._add_runs(p, para)
-                    elif para.startswith('- '):
-                        # Bullet list
+                    elif re.match(r'^\d+\.', para) or para.startswith('- '):
+                        # Numbered or bullet list
                         p = document.add_paragraph(style='List Bullet')
-                        self._add_runs(p, para[2:].strip())
+                        self._add_runs(p, para.lstrip('0123456789.- '))
                     elif para.startswith('|') and para.endswith('|'):
                         # Possible Markdown Table
                         table_lines = [para]
@@ -781,11 +845,11 @@ class ClaudeApp(tk.Tk):
                 self.margin_left = settings.get('margin_left', 2.0)
                 self.margin_right = settings.get('margin_right', 2.0)
                 self.system_prompt = settings.get('system_prompt', self.default_system_prompt)
+                self.custom_prompts = settings.get('custom_prompts', {})
         except FileNotFoundError:
             pass  # It's okay if the file doesn't exist yet
 
     def save_all_settings(self):
-        self.system_prompt = self.system_prompt_text.get(1.0, tk.END).strip()
         settings = {
             'api_key': self.api_key,
             'first_name': self.first_name,
@@ -800,12 +864,12 @@ class ClaudeApp(tk.Tk):
             'margin_bottom': self.margin_bottom,
             'margin_left': self.margin_left,
             'margin_right': self.margin_right,
-            'system_prompt': self.system_prompt
+            'system_prompt': self.system_prompt_text.get(1.0, tk.END).strip(),
+            'custom_prompts': self.custom_prompts
         }
         try:
             with open('claude_app_settings.json', 'w') as f:
                 json.dump(settings, f)
-            messagebox.showinfo("Settings", "All settings saved successfully.")
         except Exception as e:
             messagebox.showerror("Error", f"Error saving settings: {e}")
 
