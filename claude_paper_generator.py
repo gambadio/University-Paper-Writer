@@ -43,10 +43,7 @@ class ScriptsWindow(tk.Toplevel):
         delete_btn = ttk.Button(buttons_frame, text="Delete Selected", command=self.delete_selected)
         delete_btn.pack(side=tk.LEFT, padx=5)
 
-        save_btn = ttk.Button(buttons_frame, text="Save Changes", command=self.save_changes)
-        save_btn.pack(side=tk.LEFT, padx=5)
-
-        close_btn = ttk.Button(buttons_frame, text="Close", command=self.destroy)
+        close_btn = ttk.Button(buttons_frame, text="Close", command=self.on_close)
         close_btn.pack(side=tk.RIGHT, padx=5)
 
         self.update_listbox()
@@ -83,19 +80,16 @@ class ScriptsWindow(tk.Toplevel):
             del self.parent.scripts[index]
             self.update_listbox()
 
-    def save_changes(self):
-        self.parent.update_system_prompt()
-        self.parent.save_all_settings()
-        messagebox.showinfo("Success", "Changes saved and system prompt updated.")
-
     def update_listbox(self):
         self.scripts_listbox.delete(0, tk.END)
         for script in self.parent.scripts:
             self.scripts_listbox.insert(tk.END, script[0])
 
-    def destroy(self):
-        self.grab_release()  # Release the modal state before destroying
-        super().destroy()
+    def on_close(self):
+        self.parent.update_system_prompt()
+        self.parent.save_all_settings()
+        self.grab_release()
+        self.destroy()
 
 class InstructionsWindow(tk.Toplevel):
     def __init__(self, parent):
@@ -125,10 +119,7 @@ class InstructionsWindow(tk.Toplevel):
         delete_btn = ttk.Button(buttons_frame, text="Delete Selected", command=self.delete_selected)
         delete_btn.pack(side=tk.LEFT, padx=5)
 
-        save_btn = ttk.Button(buttons_frame, text="Save Changes", command=self.save_changes)
-        save_btn.pack(side=tk.LEFT, padx=5)
-
-        close_btn = ttk.Button(buttons_frame, text="Close", command=self.destroy)
+        close_btn = ttk.Button(buttons_frame, text="Close", command=self.on_close)
         close_btn.pack(side=tk.RIGHT, padx=5)
 
         self.update_listbox()
@@ -165,19 +156,16 @@ class InstructionsWindow(tk.Toplevel):
             del self.parent.instructions[index]
             self.update_listbox()
 
-    def save_changes(self):
-        self.parent.update_system_prompt()
-        self.parent.save_all_settings()
-        messagebox.showinfo("Success", "Changes saved and system prompt updated.")
-
     def update_listbox(self):
         self.instructions_listbox.delete(0, tk.END)
         for instruction in self.parent.instructions:
             self.instructions_listbox.insert(tk.END, instruction[0])
 
-    def destroy(self):
-        self.grab_release()  # Release the modal state before destroying
-        super().destroy()
+    def on_close(self):
+        self.parent.update_system_prompt()
+        self.parent.save_all_settings()
+        self.grab_release()
+        self.destroy()
 
 class FormattingWindow(tk.Toplevel):
     def __init__(self, parent):
@@ -359,6 +347,10 @@ class ClaudeApp(tk.Tk):
             "Use '#' for main headings, '##' for subheadings, and '###' for sub-subheadings. "
             "Use **bold** and *italic* text where appropriate. Include bullet points and numbered lists if necessary. "
             "Ensure that citations are properly formatted in Harvard style and included within the text. "
+            "For tables, use the following Markdown format:\n"
+            "| Header 1 | Header 2 | Header 3 |\n"
+            "|----------|----------|----------|\n"
+            "| Row 1, Col 1 | Row 1, Col 2 | Row 1, Col 3 |\n"
             "At the beginning of the paper, include a title page containing the paper's title, your name, and date. "
             "Enclose the title page content between '####TITLE PAGE####' and '####END TITLE PAGE####'.\n\n"
             "# Introduction\n"
@@ -684,16 +676,17 @@ class ClaudeApp(tk.Tk):
                         for line in title_page_content:
                             p = document.add_paragraph(line, style='TitleStyle')
                             p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                        document.add_page_break()
                         i += 1
                         continue
 
                     # Handle Headings
                     if para.startswith('# '):
-                        document.add_heading(para[2:].strip(), level=1)
+                        document.add_paragraph(para[2:].strip(), style='Heading1Custom')
                     elif para.startswith('## '):
-                        document.add_heading(para[3:].strip(), level=2)
+                        document.add_paragraph(para[3:].strip(), style='Heading2Custom')
                     elif para.startswith('### '):
-                        document.add_heading(para[4:].strip(), level=3)
+                        document.add_paragraph(para[4:].strip(), style='Heading3Custom')
                     elif re.match(r'^\d+\.', para):
                         # Numbered list
                         p = document.add_paragraph(style='List Number')
@@ -712,14 +705,15 @@ class ClaudeApp(tk.Tk):
                         i -= 1  # Adjust for the outer loop
                         table = self._parse_markdown_table(table_lines)
                         if table:
-                            document.add_table(rows=0, cols=len(table[0]))
                             word_table = document.add_table(rows=len(table), cols=len(table[0]))
+                            word_table.style = 'Table Grid'
                             for row_idx, row in enumerate(table):
                                 for col_idx, cell in enumerate(row):
                                     word_table.cell(row_idx, col_idx).text = cell
                             for row in word_table.rows:
                                 for cell in row.cells:
                                     for paragraph in cell.paragraphs:
+                                        paragraph.style = style_normal
                                         paragraph.alignment = WD_ALIGN_PARAGRAPH.LEFT
                     else:
                         # Regular paragraph
@@ -739,22 +733,13 @@ class ClaudeApp(tk.Tk):
     def _parse_markdown_table(self, table_lines):
         try:
             # Split each line by '|' and remove empty strings
-            table = []
-            for line in table_lines:
-                cells = [cell.strip() for cell in line.strip('|').split('|')]
-                table.append(cells)
+            table = [list(filter(None, line.strip('|').split('|'))) for line in table_lines]
+            # Remove the separator line
+            if len(table) > 1 and all(cell.strip().startswith('-') for cell in table[1]):
+                table.pop(1)
             return table
         except Exception:
             return None
-
-    def _add_page_numbers(self, section):
-        footer = section.footer
-        paragraph = footer.paragraphs[0]
-        paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        run = paragraph.add_run()
-        fldSimple = OxmlElement('w:fldSimple')
-        fldSimple.set(qn('w:instr'), 'PAGE')
-        run._r.append(fldSimple)
 
     def _add_runs(self, paragraph, text):
         # This method adds runs to the paragraph, handling bold and italic text
@@ -768,6 +753,15 @@ class ClaudeApp(tk.Tk):
                 run.italic = True
             else:
                 paragraph.add_run(part)
+
+    def _add_page_numbers(self, section):
+        footer = section.footer
+        paragraph = footer.paragraphs[0]
+        paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        run = paragraph.add_run()
+        fldSimple = OxmlElement('w:fldSimple')
+        fldSimple.set(qn('w:instr'), 'PAGE')
+        run._r.append(fldSimple)
 
     def load_all_settings(self):
         try:
