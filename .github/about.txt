@@ -1,0 +1,1 @@
+University Paper Writer is an AI-powered academic writing assistant leveraging Claude API to generate essays and papers with proper formatting and citations. The desktop app supports multi-format source uploads, script management, customizable instructions, and professional document export for students and researchers.
